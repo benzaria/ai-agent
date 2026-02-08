@@ -15,10 +15,10 @@ app.get('/v1/models', (req, res) => {
   res.json({
     object: 'list',
     data: [
-      { 
-        id: 'benz-bot', 
-        object: 'model', 
-        created: Math.floor(Date.now() / 1000), 
+      {
+        id: 'benz-bot',
+        object: 'model',
+        created: Math.floor(Date.now() / 1000),
         owned_by: 'library'
       }
     ]
@@ -37,8 +37,8 @@ app.post('/v1/chat/completions', async (req, res) => {
   echo(`[Request] -> ${lastUserMessage}`)
 
   try {
-    // 2. Call your Puppeteer-based 'ask' function
-    const aiResponse = await chat(messages)
+    // 2. Call your Puppeteer-based 'chat' function
+    const aiResponse = await chat(lastUserMessage)
 
     // 3. Handle Streaming (OpenClaw often requests streams)
     // If stream is true, we send a single chunk then [DONE] to satisfy the client

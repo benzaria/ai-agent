@@ -7,11 +7,11 @@ const ansi256 = (id: number | string, str: string) => colors(`38;5;${id}`, str)
 const voidFn: VoidFn = (...args: any[]) => {}
 
 const echoObj = {
-    inf: [94, 'INFO'],
-    wrn: [93, 'WARN'],
-    err: [91, 'ERROR'],
-    suc: [32, 'SUCCESS'],
-    unk: [35, 'UNKNOWN'],
+  inf: [94, 'INFO'],
+  wrn: [93, 'WARN'],
+  err: [91, 'ERROR'],
+  suc: [32, 'SUCCESS'],
+  unk: [35, 'UNKNOWN'],
 } as const
 
 type EchoObj = typeof echoObj

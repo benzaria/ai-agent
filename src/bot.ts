@@ -9,7 +9,7 @@ import config from './config.ts'
 const { selector, env } = config
 
 async function initPage({
-  headless = 'new', 
+  headless = 'new',
   temp = false
 }: {
   headless?: boolean | `${boolean}` | 'new';
@@ -28,7 +28,7 @@ async function initPage({
   // --- TAB MANAGEMENT ---
   globalThis.page = await browser.newPage()
   await page.setUserAgent(env.userAgent)
-  
+
   browser.on('targetcreated', async (target) => {
     if (target.type() === 'page') {
       const newPage = await target.page()
@@ -46,7 +46,7 @@ async function initPage({
 
     await page.bringToFront()
     await page.waitForSelector(selector.request, { timeout: env.timeout })
-    echo.suc('ChatGPT ready.' + clrLine) 
+    echo.suc('ChatGPT ready.' + clrLine)
 
   } catch (error) {
     echo.err('Puppeteer initialization failed:', error)

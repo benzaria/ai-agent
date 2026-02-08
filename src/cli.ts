@@ -9,13 +9,13 @@ const rl = readline.createInterface({ input, output })
 async function collectMultiline(prompt: string): Promise<string> {
   echo(`${prompt}`)
   let lines = []
-  
+
   while (true) {
     const line = await rl.question('')
     if (line.trim() === "") break
     lines.push(line)
   }
-  
+
   return lines.join('\n')
 }
 
@@ -25,7 +25,7 @@ async function startCli() {
     temp: args.temp
   })
   await initModel(args.model/* 'gpt-5.2-instant' */)
-  
+
   echo.inf('Bot Ready! Type your prompt below (or "exit" to quit):\n')
 
   while (true) {

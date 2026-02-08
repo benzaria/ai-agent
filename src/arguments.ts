@@ -8,7 +8,7 @@ declare global {
     model: Model
   }>
   const pArgs: string[]
-  
+
   const isBrowser: boolean
   const prvLine: string
   const clrLine: string
@@ -18,7 +18,7 @@ const options = {
 
   headless: {
     short: 'h',
-    type: 'string', 
+    type: 'string',
     default: 'new',
   },
 
