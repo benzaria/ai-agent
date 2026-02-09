@@ -326,7 +326,7 @@
                         "depth": {
                             "type": "number"
                         },
-                        "selector": {
+                        "selector.gpt": {
                             "type": "string"
                         },
                         "frame": {

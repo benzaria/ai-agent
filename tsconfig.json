@@ -1,7 +1,7 @@
 {
   "include": [
     "types.d.ts",
-    "src",
+    "src", "src/utils/config.ts",
   ],
   "exclude": [
       "node_modules",

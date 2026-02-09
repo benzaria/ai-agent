@@ -1,40 +1,58 @@
 
-import { Page } from "puppeteer";
+import { Page, Browser } from 'puppeteer'
+import { providers } from './src/utils/config.ts'
+
+type __providers = typeof providers
 
 declare global {
+  var browser: Browser
   var page: Page
-  var model: Model
+  var provider: Providers
+  var model: LLMs
+  var instructions: object
+
   var shutdown: () => void
 
-  type Simplify<T> = {[K in keyof T]: T[K]} & {}
+  type Prettify<T> = {[K in keyof T]: T[K]} & {}
+  type Literal<T, U> = T | (U & Prettify<{}>)
+  type ValueOf<T> = T extends readonly unknown[] ? T[number] : T[keyof T]
+
+  type _ = '_'
   type VoidFn = (...args: any[]) => void
+  type UnknownArray = readonly unknown[]
 
   type Config = {
-    selector: Record<string, string>
+    providers: {
+      [x: string]: {
+        api: string
+        models: string[]
+        selector: Record<string, string>
+      }
+    }
+
     env: {
       owner_name: string
       bot_name: string
       port: number
       timeout: number
-      model: Model
-      instruction: (model?: Model) => string
+      model: Models
       userAgent: string
       userData: string
     }
-  } & Record<any, any>
 
-  type Model =
-    | 'gpt-5-mini'
-    | 'gpt-5.2-auto'
-    | 'gpt-5.2-instant'
-    | 'gpt-5.2-thinking'
+    ask_instructions: () => string
+  }
+
+  type Providers = keyof __providers
+  type LLMs = __providers[Providers]['models'][number]
+  type Models = {
+    [K in Providers]: `${K}/${__providers[K]['models'][number]}`
+  }[Providers]
 
   type Query = {
-    model?: Model
     context: string
     question?: string
   } | {
-    model?: Model
     context?: string
     question: string
   }

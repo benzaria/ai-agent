@@ -5,7 +5,8 @@
   "main": "dist/main.js",
   "type": "module",
   "scripts": {
-    "start": "node ./src/model/cli.ts",
+    "start:agent": "node ./src/parser/main.ts",
+    "start:chat": "node ./src/cli/chat.ts",
     "test": "node ./src/model/bot.ts",
     "host": "node ./src/model/api.ts"
   },
@@ -15,8 +16,10 @@
   "packageManager": "pnpm@10.17.1",
   "dependencies": {
     "@benzn/to-ms": "^3.0.9",
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
     "body-parser": "^2.2.2",
     "express": "^5.2.1",
+    "grammy": "^1.39.3",
     "puppeteer": "^24.37.1",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"

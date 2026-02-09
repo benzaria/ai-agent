@@ -1,15 +1,15 @@
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util'
-import { colors } from './helpers.ts'
-import { env } from './config.ts'
+import { colors } from '../utils/helpers.ts'
+import { env } from '../utils/config.ts'
 
 declare global {
-	const args: Simplify<
+	const args: Prettify<
     Omit<
       Required<typeof values>,
       'headed' | 'model'
     > & {
       headless: boolean | 'new'
-      model: Model
+      model: Models
     }
   >
 
@@ -26,12 +26,6 @@ const options = {
     type: 'boolean',
     default: false,
   },
-
-	temp: {
-		short: 't',
-		type: 'boolean',
-		default: false,
-	},
 
 	verbose: {
 		short: 'v',
