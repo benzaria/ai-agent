@@ -1,15 +1,18 @@
 
 import { Page, Browser } from 'puppeteer'
 import { providers } from './src/utils/config.ts'
+import { WS } from './src/channels/whatsapp/wa-socket.ts'
 
 type __providers = typeof providers
 
 declare global {
+
   var browser: Browser
   var page: Page
   var provider: Providers
   var model: LLMs
   var instructions: object
+  var ws: WS
 
   var shutdown: () => void
 
@@ -20,28 +23,6 @@ declare global {
   type _ = '_'
   type VoidFn = (...args: any[]) => void
   type UnknownArray = readonly unknown[]
-
-  type Config = {
-    providers: {
-      [x: string]: {
-        api: string
-        models: string[]
-        selector: Record<string, string>
-      }
-    }
-
-    env: {
-      owner_name: string
-      bot_name: string
-      port: number
-      timeout: number
-      model: Models
-      userAgent: string
-      userData: string
-    }
-
-    ask_instructions: () => string
-  }
 
   type Providers = keyof __providers
   type LLMs = __providers[Providers]['models'][number]

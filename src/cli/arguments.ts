@@ -56,13 +56,6 @@ _args.headless = values.headed === true ? false : 'new'
 if (_args.verbose) console.log(`[${colors(`1;${94}`, 'INFO')}]`, 'args:', _args, '\n')
 
 // @ts-ignore
-globalThis.args = _args
+global.args = _args
 // @ts-ignore
-globalThis.__args = positionals
-
-// @ts-ignore
-globalThis.isBrowser = globalThis.window?.document !== undefined
-// @ts-ignore
-globalThis.prvLine = values.verbose ? '\x1b[1A\r' : ''
-// @ts-ignore
-globalThis.clrLine = values.verbose ? '\x1b[K' : ''
+global.__args = positionals

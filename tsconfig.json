@@ -1,12 +1,12 @@
 {
   "include": [
     "types.d.ts",
-    "src", "src/utils/config.ts",
+    "test",
+    "src",
   ],
   "exclude": [
       "node_modules",
       "dist",
-      "test",
       "out",
   ],
   "compilerOptions": {

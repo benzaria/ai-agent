@@ -8,5 +8,7 @@
         "node_modules": true,
         "pnpm-lock.*": true,
         "pnpm-workspace.*": true,
+        ".vscode": true,
+        "**/__._*": true
     }
 }

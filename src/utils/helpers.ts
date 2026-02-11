@@ -5,30 +5,31 @@ const delay = setTimeout
 const colors = (id: number | string, str: string) => `\x1b[${id}m${str}\x1b[0m`
 const ansi256 = (id: number | string, str: string) => colors(`38;5;${id}`, str)
 const voidFn: any = (...args: any[]) => {}
+const clearLine = () => console.log('\x1b[1A\r\x1b[K\x1b[1A')
 
-const echoObj = {
+const echoMap = {
   inf: [94, 'INFO'],
   wrn: [93, 'WARN'],
   err: [91, 'ERROR'],
   scs: [32, 'SUCCESS'],
   unk: [35, 'UNKNOWN'],
-} as const satisfies {[x: string]: [number, Uppercase<string>]}
+} as const satisfies {[x: string]: [number, string]}
 
 
-type EchoObj = typeof echoObj
-type EchoObjProp = keyof EchoObj
-type EchoArr = EchoObj[EchoObjProp] | [number, Uppercase<string>]
+type EchoMap = typeof echoMap
+type EchoMapProp = keyof EchoMap
+type EchoArr = EchoMap[EchoMapProp] | [id: number, str: string]
 type Echo =
   & {(...args: any[]): void}
   & Prettify<
     ValueOf<
       & {
-        [O in Record<EchoObjProp | 'ln' | 'lr', (...args: any[]) => void> as _]: {
+        [O in Record<EchoMapProp | 'ln' | 'lr', (...args: any[]) => void> as _]: {
           [K in keyof O]: O[K] & {[_ in 'ln' | 'lr']: O[K]}
         }
       }
       & {
-        [F in (([id, str]: EchoArr, ...args: any[]) => void) as _]: {
+        [F in ((level: EchoMapProp | EchoArr, ...args: any[]) => void) as _]: {
           [_ in 'cst' | 'vrb']: F & {[_ in 'ln' | 'lr']: F}
         }
       }
@@ -36,35 +37,36 @@ type Echo =
   >
 
 const echo = new Proxy(
-  (([id, str]: [number, Uppercase<string>], ...args: any[]) =>
-    console.log(`[${colors(`1;${id}`, str)}]`, ...args)) as Echo,
+  (([id, str]: [number, string], ...args: any[]) =>
+    console.log(`\x1b[K[${colors(`1;${id}`, str.toUpperCase())}]`, ...args)) as Echo,
   {
-    apply: (_fn, _this, args) => console.log(...args),
+    apply: (_fn, _this, args) => console.log('\x1b[K', ...args),
 
     get(fn, prop) {
+      if (prop === 'ln') return (...args: any[]) => echo(...args, '\n')
+      if (prop === 'lr') return (...args: any[]) => echo(...args, '\x1b[1A\r')
 
-      if (prop === 'ln') return (...args: any[]) => console.log(...args, '\n')
-      if (prop === 'lr') return (...args: any[]) => console.log(...args, '\x1b[1A\r\x1b[K')
-      const echoProp = (echoObj as any)[prop] ?? echoObj.unk
+      const echoProp = (echoMap as any)[prop] ?? echoMap.unk
+      const fnc = (level: EchoMapProp | EchoArr, ...args: any[]) =>
+        fn(typeof level === 'string' ? echoMap[level] : level, ...args)
 
       return new Proxy(
-        prop as string === 'cst' ? fn :
-        prop as string === 'vrb' ? args.verbose ? fn : voidFn :
-        prop === 'inf' && !args.verbose ? voidFn :
+        prop as string === 'cst' ? fnc :
+        prop as string === 'vrb' ? args?.verbose ? fnc : voidFn :
+        prop === 'inf' && !args?.verbose ? voidFn :
         (...args: any[]) => fn(echoProp, ...args),
         {
           apply: (fn, _this, args) => fn(...args),
 
           get(fn, prop) {
-
             if (prop === 'ln') return (...args: any[]) => fn(...args, '\n')
-            if (prop === 'lr') return (...args: any[]) => fn(...args, '\x1b[1A\r\x1b[K')
+            if (prop === 'lr') return (...args: any[]) => fn(...args, '\x1b[1A\r')
 
             return fn
           }
         }
       )
-    },
+    }
   }
 )
 
@@ -94,6 +96,7 @@ const template = (q: Query, br: string = '<br>----------------------------------
 
 export {
   echo,
+  echoMap,
   colors,
   ansi256,
   delay,

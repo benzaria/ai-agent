@@ -1,6 +1,6 @@
 import { initPage, initModel, chat, initProvider } from './bot.ts'
+import { instructions } from '../agent/instructions.ts'
 import { echo } from '../utils/helpers.ts'
-import { instructions } from '../parser/instructions.ts'
 
 //@ts-ignore
 import bodyParser from 'body-parser'

@@ -1,3 +1,27 @@
+import secrets from './!secrets.json' with {type: 'json'}
+
+type Config = {
+  providers: {
+    [x: string]: {
+      api: string
+      models: string[]
+      selector: Record<string, string>
+    }
+  }
+
+  env: {
+    owner_name: string
+    bot_name: string
+    port: number
+    timeout: number
+    model: Models
+    userAgent: string
+    userData: string
+    wsAuth: string
+  } & typeof secrets
+
+  ask_instructions: () => string
+}
 
 const providers = {
   openai: {
@@ -33,13 +57,13 @@ const providers = {
 } as const satisfies Config['providers']
 
 const env = {
-  owner_name: 'Benzaria Achraf (Benz)',
-  bot_name: 'benz.bot',
   port: 3000,
   timeout: 90000,
   model: 'openai/gpt-5-mini',
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   userData: '__user_data',
+  wsAuth: '__ws_auth',
+  ...secrets
 } as const satisfies Config['env']
 
 const ask_instructions = () => `

@@ -1,27 +1,39 @@
 import '../cli/arguments.ts'
-
 import puppeteer from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { template, echo, delay } from '../utils/helpers.ts'
+import { instructions } from '../agent/instructions.ts'
 import { providers, env } from '../utils/config.ts'
+import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { parser, runAction } from '../agent/parser.ts'
+
+// --- CLEANUP LOGIC ---
+global.shutdown = async () => {
+  echo.inf('Closing session...')
+  await browser.close()
+  await rm(join(env.userData, 'Default/Sessions'), { recursive: true, force: true })
+    .catch(() => echo.vrb('err', 'No such file or directory: "/Default/Sessions"'))
+  process.exit()
+}
 
 async function initPage(headless: boolean | 'new' = 'new') {
   puppeteer.use(StealthPlugin())
 
-  echo.inf('Initializing Puppeteer...' + prvLine)
-  globalThis.browser = await puppeteer.launch({
+  echo.inf.lr('Initializing Puppeteer...' )
+  global.browser = await puppeteer.launch({
     headless: headless as any,
     userDataDir: env.userData,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--no-default-browser-check',
-      // '--restore-last-session=false',
+      '--restore-last-session=false',
     ],
   })
 
   // --- TAB MANAGEMENT ---
-  globalThis.page = await browser.newPage()
+  global.page = await browser.newPage()
   await page.setUserAgent(env.userAgent)
 
   browser.on('targetcreated', async (target) => {
@@ -31,15 +43,15 @@ async function initPage(headless: boolean | 'new' = 'new') {
     }
   })
 
-  echo.scs('Puppeteer ready.' + clrLine)
+  echo.scs('Puppeteer ready.')
 }
 
 async function initProvider(model: Models) {
   try {
-    echo.inf('Initializing Provider...' + prvLine)
+    echo.inf.lr('Initializing Provider...')
     const spl = model.split('/') as [Providers, LLMs]
-    globalThis.provider = spl[0]
-    globalThis.model = spl[1]
+    global.provider = spl[0]
+    global.model = spl[1]
 
     await page.goto(
       providers[provider]['api'],
@@ -49,22 +61,15 @@ async function initProvider(model: Models) {
     await page.bringToFront()
     await page.waitForSelector(providers[provider]['selector'].request, { timeout: env.timeout })
 
-    echo.scs('Provider ready.' + clrLine)
+    echo.scs('Provider ready.')
 
   } catch (error) {
     echo.err('Provider initialization failed:', error)
-    process.exit()
+    shutdown()
   } finally {
-    // --- CLEANUP LOGIC ---
     browser.pages()
-      .then(pages => pages.forEach(page =>  page !== globalThis.page ? page.close() : null))
+      .then(pages => pages.forEach(page =>  page !== global.page ? page.close() : null))
       .catch(echo.err)
-
-    globalThis.shutdown = async () => {
-      echo.inf('Closing session...')
-      await browser.close()
-      process.exit()
-    }
 
     process.on('SIGINT', shutdown)
     process.on('SIGTERM', shutdown)
@@ -73,24 +78,24 @@ async function initProvider(model: Models) {
 }
 
 async function initModel(instructions: object) {
-  echo.inf('Initializing Model...' + prvLine)
-  globalThis.instructions = instructions
+  echo.inf.lr('Initializing Model...')
+  global.instructions = instructions
 
   const verbose = args.verbose
   args.verbose = false
-  const res = await chat(instructions)
+  const res = await chat({request: "status", ...instructions})
   args.verbose = verbose
 
   await delay(200)
-  if (res?.toLowerCase()?.includes('none'))
-    echo.scs("Model ready." + clrLine)
+  if (res?.includes('OK'))
+    echo.scs("Model ready.")
   else
-    echo.wrn('Model initialization failed:' + clrLine, res)
+    echo.wrn('Model initialization failed:', res)
 }
 
 async function ask(q: Query) {
-  if (!globalThis.page) return initPrblm('Page', 'err'), 'Could not get response.'
-  if (!globalThis.provider) return initPrblm('Provider', 'err'), 'Could not get response.'
+  if (!global.page) return initPrblm('Page', 'err'), 'Could not get response.'
+  if (!global.provider) return initPrblm('Provider', 'err'), 'Could not get response.'
 
   echo.inf(`\nquestion: ${q.question}${q.context ? '\ncontext: ' + q.context : '' }\n`)
   const prompt = template(q)
@@ -106,7 +111,7 @@ async function ask(q: Query) {
   await delay(200)
   await page.click(providers[provider]['selector'].sendBtn)
 
-  echo.inf('Waiting for AI response...' + prvLine)
+  echo.inf.lr('Waiting for AI response...')
   await page.waitForSelector(providers[provider]['selector'].stopBtn, { visible: true, timeout: env.timeout })
 
   const response = await page.evaluate((selector) => {
@@ -115,8 +120,7 @@ async function ask(q: Query) {
     return lastMessage ? lastMessage.innerText.trim() : 'Could not find response.'
   }, providers[provider]['selector'].response)
 
-  echo.vrb([35, 'RESPONSE'],
-    clrLine +
+  echo.vrb([32, "RESPONSE"],
     '\n-------------------------\n' +
     response +
     '\n-------------------------\n'
@@ -126,9 +130,9 @@ async function ask(q: Query) {
 }
 
 async function chat(p: object | string) {
-  if (!globalThis.page) return initPrblm('Page', 'err'), 'Could not get response.'
-  if (!globalThis.provider) return initPrblm('Provider', 'err'), 'Could not get response.'
-  if (!globalThis.instructions) initPrblm('Model', 'wrn')
+  if (!global.page) return initPrblm('Page', 'err')
+  if (!global.provider) return initPrblm('Provider', 'err')
+  if (!global.instructions) initPrblm('Model', 'wrn')
 
   const prompt = JSON.stringify(typeof p === 'string' ? {request: p} : p)
 
@@ -143,7 +147,7 @@ async function chat(p: object | string) {
   await delay(200)
   await page.click(providers[provider]['selector'].sendBtn)
 
-  echo.inf('Waiting for AI response...' + prvLine)
+  echo.inf.lr('Waiting for AI response...')
   await page.waitForSelector(providers[provider]['selector'].stopBtn, { visible: true, timeout: env.timeout })
 
   const response = await page.evaluate((selector) => {
@@ -157,7 +161,6 @@ async function chat(p: object | string) {
   }, providers[provider]['selector'])
 
   echo.vrb([32, "RESPONSE"],
-    clrLine +
     '\n-------------------------\n' +
     response +
     '\n-------------------------\n'
@@ -167,17 +170,23 @@ async function chat(p: object | string) {
 }
 
 const initPrblm = (step: 'Page' | 'Provider' | 'Model', level: 'err' | 'wrn') =>
-  echo[level](`${step} not initialized. Call \`init${step}\` first.`)
+  (echo[level](`${step} not initialized. Call \`init${step}\` first.`), 'Could not get response.')
+
+async function initBot() {
+  await initPage(args.headless)
+  await initProvider(args.model)
+  await initModel(instructions)
+}
 
 // This ensures it only runs if called directly
 if (import.meta.main) {
   (async () => {
-    await initPage(args.headless)
-    await initProvider('openai/gpt-5-mini')
-    await initModel({})
+    // await initPage(args.headless)
+    // await initProvider(args.model)
+    // await initModel({})
+    await initBot()
 
-    await chat({request: 'write a poem about morocco'})
-
+    await chat('write a poem about morocco')
     shutdown()
   })()
 }
@@ -186,6 +195,7 @@ export {
   initPage,
   initProvider,
   initModel,
+  initBot,
   ask,
   chat,
 }

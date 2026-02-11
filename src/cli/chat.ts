@@ -1,9 +1,7 @@
 import { stdin as input, stdout as output } from 'node:process'
 import * as readline from 'node:readline/promises'
-import { initPage, initModel, chat, initProvider } from '../model/bot.ts'
+import { initBot, chat } from '../model/bot.ts'
 import { echo } from '../utils/helpers.ts'
-import { instructions } from '../parser/instructions.ts'
-
 
 const rl = readline.createInterface({ input, output })
 
@@ -21,11 +19,12 @@ async function collectPrompt(prompt: string): Promise<string> {
 }
 
 async function startCLI(callback?: (...args: any[]) => any) {
-  await initPage(args.headless)
-  await initProvider('openai/gpt-5-mini')
-  await initModel(instructions)
+  // await initPage(args.headless)
+  // await initProvider(args.model)
+  // await initModel(instructions)
+  await initBot()
 
-  echo.inf('Bot Ready! Type your prompt below (or "exit" to quit):\n')
+  echo.inf('\nBot Ready! Type your prompt below (or "exit" to quit):')
   let prompt, response
 
   while (true) {

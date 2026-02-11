@@ -34,8 +34,6 @@ const instructions = {
             instruction: "Do not expose reasoning. Only output final JSON"
         },
         fallback_behavior: {
-            hello: [{action: "talk"}, {action: 'status'}],
-            first_chat: [{action: "talk"}, {action: 'status'}],
             no_action: {action: "none"},
             no_request: {action: "none"},
         }
@@ -155,17 +153,17 @@ const instructions = {
             rules: [
                 "User must explicitly request sending a message",
                 "Platform must be one of the specified values",
-                "Recipient must be a contact name or identifier",
+                "Recipient must be a contact name, identifier or number",
                 "If information is missing, return an error action",
-                "Message must be plain text",
-                "Never fabricate recipients or messages"
+                "Never fabricate recipients or messages",
+                "Message must be plain text"
             ]
         },
         {
-            name: "shell",
+            name: "execute",
             description: "Execute a shell command on the host system",
             structure: {
-                action: "shell",
+                action: "execute",
                 shell: string,
                 command: string
             },
@@ -205,7 +203,94 @@ const instructions = {
                 "No truncation",
                 "Ensure proper escaping for JSON compatibility"
             ]
-        }
+        },
+        {
+            name: "download",
+            description: "Download a file from a given URL",
+            structure: {
+                action: "download",
+                url: string,
+                save_as: string
+            },
+            rules: [
+                "URL must be fully specified",
+                "save_as must include the full filename",
+                "Do not download files without explicit user instruction"
+            ]
+        },
+        {
+            name: "compress",
+            description: "Compress a file or directory into an archive",
+            structure: {
+                action: "compress",
+                path: string,
+                archive_type: code
+            },
+            archive_types: ["zip", "tar", "gz"],
+            rules: [
+                "Path must exist and be accessible",
+                "archive_type must be one of the specified values",
+                "Do not compress without explicit user instruction"
+            ]
+        },
+        {
+            name: "decompress",
+            description: "Extract a compressed archive",
+            structure: {
+                action: "decompress",
+                archive_path: string,
+                destination: string
+            },
+            rules: [
+                "archive_path must exist",
+                "destination must be valid",
+                "Do not overwrite files without explicit instruction"
+            ]
+        },
+        {
+            name: "calculate",
+            description: "Perform a mathematical calculation",
+            structure: {
+                action: "calculate",
+                expression: string
+            },
+            rules: [
+                "Expression must be valid mathematical notation",
+                "Do not infer missing operands or operators"
+            ]
+        },
+        {
+            name: "web_search",
+            description: "Search the web and return the resulte in a {\"action\": \"talk\"}",
+            structure: {
+                action: "web_search",
+                result: string
+            },
+            rules: [],
+        },
+        {
+            name: "fetch_api",
+            description: "Make an HTTP request to a specified API endpoint",
+            structure: {
+                action: "fetch_api",
+                method: code,
+                url: string,
+                headers: string,
+                body: string
+            },
+            method_codes: [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE"
+            ],
+            rules: [
+                "Method must be one of the specified codes",
+                // "URL must be absolute",
+                "Headers and body must be valid JSON strings if provided",
+                "Do not send requests without explicit user instruction"
+            ]
+        },
     ],
     validation: {
         strict_mode: true,
@@ -223,6 +308,18 @@ const instructions = {
         "Never include comments",
         "Never include trailing commas"
     ]
-} as const
+} as const satisfies {
+    [x: string]: any
+    actions: {
+        [x: string]: any
+        name: string
+        description: string
+        structure: {
+            [x: string]: any
+            action: string
+        }
+        rules: string[]
+    }[]
+}
 
 export { instructions }
