@@ -6,19 +6,23 @@ global.args.verbose = true
 
 echo('test_start')
 
+delay(2_000)
+    .then(echo('test_callback'))
+    .catch(echo('test_callback_2'))
 
+delay(2_000, echo('test_callback'))
 
-echo.inf('test_1___')
-echo.inf.lr('test_2')
+// echo.inf.lr('test_1___')
+// echo.inf('test_2')
 
-echo.wrn('test_1___')
-echo.wrn.lr('test_2')
+// echo.wrn.lr('test_1___')
+// echo.wrn('test_2')
 
-echo.err('test_1___')
-echo.err.lr('test_2')
+// echo.err.lr('test_1___')
+// echo.err('test_2')
 
-echo.scs('test_1___')
-echo.scs.lr('test_2')
+// echo.scs.lr('test_1___')
+// echo.scs('test_2')
 
 
 // await delay(2000)

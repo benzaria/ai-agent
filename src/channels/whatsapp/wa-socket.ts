@@ -2,66 +2,84 @@ import {
   makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
-  fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  //- fetchLatestBaileysVersion,
 } from 'baileys'
-import pino from 'pino'
-import qrcode from 'qrcode-terminal'
 
 import {
-  mkdirSync,
-  existsSync,
-  copyFileSync,
-  readFileSync,
-} from 'node:fs'
+  rm,
+  mkdir,
+  copyFile,
+  readFile,
+} from 'node:fs/promises'
+
 import { join } from 'node:path'
 import { env } from '../../utils/config.ts'
-import { echo } from '../../utils/helpers.ts'
+import { delay, echo, queue, lazy, voidFn } from '../../utils/helpers.ts'
 
 type CreateSocketOpts = {
   authDir?: string
   printQr?: boolean
   onQr?: (qr: string) => void
-  logger?: 'silent' | 'info' | 'debug'
+  logger?: 'none' | 'silent' | 'info' | 'debug'
 }
+type WS = Awaited<ReturnType<typeof createWASocket>>
+type ReconnectFn = (opts: CreateSocketOpts) => Promise<WS>
 
-let saveQueue: Promise<void> = Promise.resolve()
+const getQR = lazy(() => import('qrcode-terminal'))
+const getPino = lazy(() => import('pino'))
 
-function enqueueSave(saveCreds: () => Promise<void> | void) {
-  saveQueue = saveQueue
-    .then(() => Promise.resolve(saveCreds()))
-    .catch(() => { })
-}
+const qsaveCreds = queue(async (saveCreds: AsyncFn) => {
+  echo.inf('Save creds')
+  await saveCreds()
+})
 
-function backupCreds(authDir: string) {
+async function backupCreds(authDir: string) {
+  echo.inf('Backup creds')
+
+  const creds = join(authDir, 'creds.json')
+  const backup = join(authDir, 'creds.backup.json')
+
   try {
-    const credsPath = join(authDir, 'creds.json')
-    const backupPath = join(authDir, 'creds.backup.json')
+    // check valid JSON
+    JSON.parse(await readFile(creds, 'utf-8'))
+    await copyFile(creds, backup)
+  } catch {}
+}
 
-    if (!existsSync(credsPath)) return
-
-    const raw = readFileSync(credsPath, 'utf-8')
-
-    // only backup valid JSON
-    JSON.parse(raw)
-
-    copyFileSync(credsPath, backupPath)
+async function restoreCredsIfCorrupted(authDir: string) {
+  const creds = join(authDir, 'creds.json')
+  const backup = join(authDir, 'creds.backup.json')
+  
+  try {
+    // check valid JSON
+    JSON.parse(await readFile(creds, 'utf-8'))
   } catch {
-    // ignore backup errors
+    await copyFile(backup, creds)
+      .then(() => echo.wrn('Restore creds from backup.'))
+      .catch(echo.err)
   }
 }
 
-async function createWASocket(opts: CreateSocketOpts = {}) {
-  const authDir = opts.authDir ?? env.wsAuth
+async function createWASocket(
+  opts: CreateSocketOpts = {},
+  reconnectFn?: ReconnectFn
+) {
+  const authDir = opts.authDir ?? env.ws_auth
+  await mkdir(authDir, { recursive: true })
 
-  if (!existsSync(authDir)) {
-    mkdirSync(authDir, { recursive: true })
-  }
+  const logger = opts.logger === 'none'
+    ? {
+      level: 'silent',
+      child: function (this) { return this },
+      trace: voidFn, debug: voidFn, info: voidFn,
+      warn: voidFn, error: voidFn, fatal: voidFn,
+    }
+    : (await getPino()).default({ level: opts.logger ?? 'info' })
 
-  const logger = pino({ level: opts.logger ?? 'info' })
-
+  await restoreCredsIfCorrupted(authDir)
   const { state, saveCreds } = await useMultiFileAuthState(authDir)
-  //   const { version } = await fetchLatestBaileysVersion()
+  //-   const { version } = await fetchLatestBaileysVersion()
 
   echo.inf.lr('Initializing WASocket...')
   const sock = makeWASocket({
@@ -70,18 +88,18 @@ async function createWASocket(opts: CreateSocketOpts = {}) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger)
     },
-    // version,
-    browser: ['benz-bot', 'chrome', '1.0.0']
+    //- version,
+    browser: [env.bot_name, 'chrome', '1.0.0']
   })
 
-  // 🔐 Save creds safely
-  sock.ev.on('creds.update', () => {
-    backupCreds(authDir)
-    enqueueSave(saveCreds)
+  // Save creds safely
+  sock.ev.on('creds.update', async () => {
+    await backupCreds(authDir)
+    qsaveCreds(saveCreds)
   })
 
-  // 🔌 Connection updates
-  sock.ev.on('connection.update', (update) => {
+  // Connection updates
+  sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
     // QR handling
@@ -89,8 +107,10 @@ async function createWASocket(opts: CreateSocketOpts = {}) {
       opts.onQr?.(qr)
 
       if (opts.printQr) {
-        echo.inf('\n📱 Scan this QR:\n')
-        qrcode.generate(qr, { small: true })
+        const QRCode = await getQR()
+
+        echo.inf('\n📱Scan this QR:\n')
+        QRCode.generate(qr, { small: true })
       }
     }
 
@@ -99,40 +119,45 @@ async function createWASocket(opts: CreateSocketOpts = {}) {
     }
 
     if (connection === 'close') {
-      const status =
-        (lastDisconnect?.error as any)?.output?.statusCode
-
-      const shouldReconnect =
-        status !== DisconnectReason.loggedOut
+      const status = (lastDisconnect?.error as any)?.output?.statusCode
+      const shouldReconnect = status !== DisconnectReason.loggedOut
 
       echo.err('Connection closed:', status)
 
       if (shouldReconnect) {
         echo.inf.lr('Reconnecting...')
-        createWASocket(opts)
-      } else {
-        echo.wrn('🚪 Logged out. Delete auth folder.')
+
+        try {
+          sock.ev.removeAllListeners('messages.upsert')
+          sock.ws.removeAllListeners()
+          sock.ws.close()
+        } catch {}
+
+        delay(1000, () => (reconnectFn ?? createWASocket)(opts))
+      }
+      else {
+        echo.wrn('🚪 Logged out. Deleting auth folder.')
+        await rm(authDir, { recursive: true, force: true })
       }
     }
   })
 
-  // 🌐 WS error safety
+  // WS error safety
   sock.ws?.on?.('error', (err: Error) => {
-    echo.err('WebSocket error:', err.message)
+    echo.err('WASocket error:', err.message)
   })
 
   return sock
 }
 
-type WS = Awaited<ReturnType<typeof createWASocket>>
 
 export {
   createWASocket,
-  enqueueSave,
+  restoreCredsIfCorrupted,
   backupCreds,
+  qsaveCreds,
 }
 
 export type {
-  WS,
-  CreateSocketOpts,
+  WS, CreateSocketOpts,
 }

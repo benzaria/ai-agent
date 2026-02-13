@@ -1,9 +1,9 @@
-import { stdin as input, stdout as output } from 'node:process'
-import * as readline from 'node:readline/promises'
+import { createInterface } from 'node:readline/promises'
 import { initBot, chat } from '../model/bot.ts'
+import { stdin, stdout } from 'node:process'
 import { echo } from '../utils/helpers.ts'
 
-const rl = readline.createInterface({ input, output })
+const rl = createInterface({ input: stdin, output: stdout })
 
 async function collectPrompt(prompt: string): Promise<string> {
   echo(`${prompt}`)

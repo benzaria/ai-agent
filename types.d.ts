@@ -16,13 +16,21 @@ declare global {
 
   var shutdown: () => void
 
+  type IsAny<T> = 0 extends (1 & T) ? true : false
+  type IsNever<T> = [T] extends [never] ? true : false
   type Prettify<T> = {[K in keyof T]: T[K]} & {}
   type Literal<T, U> = T | (U & Prettify<{}>)
   type ValueOf<T> = T extends readonly unknown[] ? T[number] : T[keyof T]
+  type SyncFn<P extends any[] = [], R = void> = (...args: P) => R
+  type AsyncFn<P extends any[] = [], R = void> = (...args: P) => Promise<R>
 
   type _ = '_'
   type VoidFn = (...args: any[]) => void
-  type UnknownArray = readonly unknown[]
+  type AnyArray = readonly unknown[]
+  type AnyRecord = {[x in any]: unknown}
+  type AnyFunction = (...args: any[]) => any
+  type EmptyObject = {}
+  type EmptyArray = readonly []
 
   type Providers = keyof __providers
   type LLMs = __providers[Providers]['models'][number]

@@ -1,5 +1,5 @@
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util'
-import { colors } from '../utils/helpers.ts'
+import { echo } from '../utils/helpers.ts'
 import { env } from '../utils/config.ts'
 
 declare global {
@@ -23,6 +23,12 @@ const options = {
 
   headed: {
     short: 'h',
+    type: 'boolean',
+    default: false,
+  },
+
+  'new-conv': {
+    short: 'c',
     type: 'boolean',
     default: false,
   },
@@ -53,9 +59,9 @@ const _args: typeof args = {...values as any}
 delete (_args as any)['headed']
 _args.headless = values.headed === true ? false : 'new'
 
-if (_args.verbose) console.log(`[${colors(`1;${94}`, 'INFO')}]`, 'args:', _args, '\n')
-
 // @ts-ignore
 global.args = _args
 // @ts-ignore
 global.__args = positionals
+
+if (args.verbose) echo('args:', _args)

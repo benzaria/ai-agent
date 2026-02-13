@@ -1,18 +1,17 @@
 import '../cli/arguments.ts'
 import puppeteer from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+import { providers, env, modifySecrets } from '../utils/config.ts'
 import { template, echo, delay } from '../utils/helpers.ts'
 import { instructions } from '../agent/instructions.ts'
-import { providers, env } from '../utils/config.ts'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parser, runAction } from '../agent/parser.ts'
 
 // --- CLEANUP LOGIC ---
 global.shutdown = async () => {
   echo.inf('Closing session...')
-  await browser.close()
-  await rm(join(env.userData, 'Default/Sessions'), { recursive: true, force: true })
+  await global.browser?.close()
+  await rm(join(env.user_data, 'Default/Sessions'), { recursive: true, force: true })
     .catch(() => echo.vrb('err', 'No such file or directory: "/Default/Sessions"'))
   process.exit()
 }
@@ -23,7 +22,7 @@ async function initPage(headless: boolean | 'new' = 'new') {
   echo.inf.lr('Initializing Puppeteer...' )
   global.browser = await puppeteer.launch({
     headless: headless as any,
-    userDataDir: env.userData,
+    userDataDir: env.user_data,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -34,7 +33,16 @@ async function initPage(headless: boolean | 'new' = 'new') {
 
   // --- TAB MANAGEMENT ---
   global.page = await browser.newPage()
-  await page.setUserAgent(env.userAgent)
+  await page.setUserAgent({ userAgent: env.userAgent })
+  await page.setViewport({ width: 600, height: 600 })
+  await page.setRequestInterception(true)
+
+  page.on('request', req => {
+    if (['image','font','media', args.headless ? 'stylesheet' : null].includes(req.resourceType()))
+      req.abort()
+    else
+      req.continue()
+  })
 
   browser.on('targetcreated', async (target) => {
     if (target.type() === 'page') {
@@ -53,27 +61,33 @@ async function initProvider(model: Models) {
     global.provider = spl[0]
     global.model = spl[1]
 
-    await page.goto(
-      providers[provider]['api'],
-      { waitUntil: 'networkidle2', timeout: env.timeout }
-    )
-
     await page.bringToFront()
+    await page.goto(
+      providers[provider]['api'] + (!args['new-conv'] && env.conversation ? `c/${env.conversation}` : ''),
+      { waitUntil: 'domcontentloaded', timeout: env.timeout }
+    )
+    await page.addStyleTag({
+      content: '*,*::before,*::after{animation:none!important;transition:none!important}'
+    })
+
     await page.waitForSelector(providers[provider]['selector'].request, { timeout: env.timeout })
 
     echo.scs('Provider ready.')
 
-  } catch (error) {
-    echo.err('Provider initialization failed:', error)
+  } catch (err) {
+    echo.err('Provider initialization failed:', err)
     shutdown()
   } finally {
     browser.pages()
       .then(pages => pages.forEach(page =>  page !== global.page ? page.close() : null))
-      .catch(echo.err)
+      .catch(() => echo.wrn('Pages cleanup failed'))
 
     process.on('SIGINT', shutdown)
     process.on('SIGTERM', shutdown)
-    process.on('uncaughtException', shutdown)
+    process.on('uncaughtException', (err) => {
+      echo.err(err)
+      shutdown()
+    })
   }
 }
 
@@ -86,11 +100,19 @@ async function initModel(instructions: object) {
   const res = await chat({request: "status", ...instructions})
   args.verbose = verbose
 
-  await delay(200)
   if (res?.includes('OK'))
     echo.scs("Model ready.")
   else
     echo.wrn('Model initialization failed:', res)
+
+  await page.waitForFunction(() => {
+    return location.pathname.startsWith('/c/')
+  }, { timeout: env.timeout })
+
+  const conversation = page.url().split('/c/')[1]
+  echo.inf('Conversation UUID:', conversation)
+ 
+  modifySecrets({ conversation })
 }
 
 async function ask(q: Query) {
@@ -169,8 +191,10 @@ async function chat(p: object | string) {
   return response
 }
 
-const initPrblm = (step: 'Page' | 'Provider' | 'Model', level: 'err' | 'wrn') =>
-  (echo[level](`${step} not initialized. Call \`init${step}\` first.`), 'Could not get response.')
+const initPrblm = (step: 'Page' | 'Provider' | 'Model', level: 'err' | 'wrn') => (
+  echo[level](`${step} not initialized. Call \`init${step}\` first.`),
+  'Could not get response.'
+)
 
 async function initBot() {
   await initPage(args.headless)
@@ -181,11 +205,7 @@ async function initBot() {
 // This ensures it only runs if called directly
 if (import.meta.main) {
   (async () => {
-    // await initPage(args.headless)
-    // await initProvider(args.model)
-    // await initModel({})
     await initBot()
-
     await chat('write a poem about morocco')
     shutdown()
   })()
