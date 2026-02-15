@@ -14,7 +14,7 @@ type Instructions = {
 }
 
 export type {
-    Instructions
+	Instructions
 }
 
 const string: string = 'string'
@@ -22,8 +22,7 @@ const stringArr: string[] = [string]
 const code = string as never
 
 export {
-    code,
-    string,
-    stringArr,
+	code,
+	string,
+	stringArr,
 }
-

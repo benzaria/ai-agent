@@ -1,161 +1,160 @@
 import {
-  readdir,
-  readFile,
-  writeFile,
-  constants,
-  copyFile,
-  unlink,
-  access,
-  rename,
-  mkdir,
-  stat,
-  cp,
-  rm,
+	readdir,
+	readFile,
+	writeFile,
+	constants,
+	copyFile,
+	unlink,
+	access,
+	rename,
+	mkdir,
+	stat,
+	cp,
+	rm,
 } from 'node:fs/promises'
 import { push, reply, type Actions, type ActionsType } from './actions.ts'
-import { echo } from '../../utils/helpers.ts'
+import { echo } from '../../utils/tui.ts'
 
 const error = (ctx: ActionsType, err: Error) => {
-  push(
-    {
-      ...ctx,
-      action: "error",
-      error: "EXECUTION_FAILED",
-      details: err.message,
-    }
-  )
+	push(
+		{
+			...ctx,
+			action: 'error',
+			error: 'EXECUTION_FAILED',
+			details: err.message,
+		},
+	)
 }
 
 const file_actions = {
 
-  async exists() {
-    const { action, path, keywords = [] } = this
+	async exists() {
+		const { action, path, keywords = [] } = this
 
-    echo.cst([34, action], path)
+		echo.cst([34, action], path)
 
-    const lKeywords: string[] = keywords
-      .map((key: string) => key.toLowerCase())
+		const lKeywords: string[] = keywords
+			.map((key: string) => key.toLowerCase())
 
-    await readdir(path)
-      .then(async files => {
-        const result = files.filter(
-          file => (
-            lKeywords.filter(
-              (key: string) => file
-                .toLowerCase().includes(key)
-            )
-          ).length
-        )
+		await readdir(path)
+			.then(async files => {
+				const result = files.filter(
+					file => (
+						lKeywords.filter(
+							(key: string) => file
+								.toLowerCase().includes(key),
+						)
+					).length,
+				)
 
-        push(
-          {
-            ...this,
-            result,
-            action: 'result',
-            action_was: {
-              action,
-              path,
-              keywords
-            }
-          }
-        )
-      })
-      .catch((err: Error) => error(this, err))
-    
-    
-  },
+				push(
+					{
+						...this,
+						result,
+						action: 'result',
+						action_was: {
+							action,
+							path,
+							keywords,
+						},
+					},
+				)
+			})
+			.catch((err: Error) => error(this, err))
 
-  async mkdir() {
-    const { action, path, recursive = true } = this
+	},
 
-    echo.cst([34, action], path)
+	async mkdir() {
+		const { action, path, recursive = true } = this
 
-    await mkdir(path, { recursive })
-      .then(() => reply(this, `*[MKDIR]* \`${path}\``))
-      .catch((err: Error) => error(this, err))
-  },
+		echo.cst([34, action], path)
 
-  async write() {
-    const { action, path, content } = this
+		await mkdir(path, { recursive })
+			.then(() => reply(this, `*[MKDIR]* \`${path}\``))
+			.catch((err: Error) => error(this, err))
+	},
 
-    echo.cst([32, action], path)
-    reply(this, content)
+	async write() {
+		const { action, path, content } = this
 
-    await writeFile(path, content, 'utf-8')
-      .then(() => reply(this, `*[WRITE]* \`${path}\``))
-      .catch((err: Error) => error(this, err))
-  },
+		echo.cst([32, action], path)
+		reply(this, content)
 
-  async read() {
-    const { action, path } = this
+		await writeFile(path, content, 'utf-8')
+			.then(() => reply(this, `*[WRITE]* \`${path}\``))
+			.catch((err: Error) => error(this, err))
+	},
 
-    echo.cst([32, action], path)
+	async read() {
+		const { action, path } = this
 
-    await stat(path)
-      .then(async info => {
-        let result: string | string[]
+		echo.cst([32, action], path)
 
-        if (info.isDirectory())
-          result = await readdir(path, 'utf-8')
-        else
-          result = await readFile(path, 'utf-8')
+		await stat(path)
+			.then(async info => {
+				let result: string | string[]
 
-        push({
-          ...this,
-          result,
-          action: 'result',
-          action_was: {
-            action,
-            path
-          }
-        })
-      })
-      .catch((err: Error) => error(this, err))
-  },
+				if (info.isDirectory())
+					result = await readdir(path, 'utf-8')
+				else
+					result = await readFile(path, 'utf-8')
 
-  async delete() {
-    const { action, path, recursive = true, force = true } = this
+				push({
+					...this,
+					result,
+					action: 'result',
+					action_was: {
+						action,
+						path,
+					},
+				})
+			})
+			.catch((err: Error) => error(this, err))
+	},
 
-    echo.cst([31, action], path)
+	async delete() {
+		const { action, path, recursive = true, force = true } = this
 
-    await stat(path)
-      .then(async info => {
-        if (info.isDirectory())
-          await rm(path, { recursive, force })
-        else
-          await unlink(path)
+		echo.cst([31, action], path)
 
-        reply(this, `*[DELETE]* \`${path}\``)
-      })
-      .catch((err: Error) => error(this, err))
-  },
+		await stat(path)
+			.then(async info => {
+				if (info.isDirectory())
+					await rm(path, { recursive, force })
+				else
+					await unlink(path)
 
-  async copy() {
-    const { action, from, to, recursive = true } = this
+				reply(this, `*[DELETE]* \`${path}\``)
+			})
+			.catch((err: Error) => error(this, err))
+	},
 
-    echo.cst([33, action], `${from} → ${to}`)
+	async copy() {
+		const { action, from, to, recursive = true } = this
 
-    await stat(from)
-      .then(async info => {
-        if (info.isDirectory())
-          await cp(from, to, { recursive })
-        else
-          await copyFile(from, to)
+		echo.cst([33, action], `${from} → ${to}`)
 
-        reply(this, `*[COPY]* \`${from}\` → \`${to}\``)
-      })
-      .catch((err: Error) => error(this, err))
-  },
+		await stat(from)
+			.then(async info => {
+				if (info.isDirectory())
+					await cp(from, to, { recursive })
+				else
+					await copyFile(from, to)
 
-  async move() {
-    const { action, from, to } = this
+				reply(this, `*[COPY]* \`${from}\` → \`${to}\``)
+			})
+			.catch((err: Error) => error(this, err))
+	},
 
-    echo.cst([33, action], `${from} → ${to}`)
+	async move() {
+		const { action, from, to } = this
 
-    await rename(from, to)
-      .then(() => reply(this, `*[MOVE]* \`${from}\` → \`${to}\``))
-      .catch((err: Error) => error(this, err))
-  },
+		echo.cst([33, action], `${from} → ${to}`)
+
+		await rename(from, to)
+			.then(() => reply(this, `*[MOVE]* \`${from}\` → \`${to}\``))
+			.catch((err: Error) => error(this, err))
+	},
 
 } as const satisfies Actions
 

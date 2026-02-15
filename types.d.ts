@@ -21,7 +21,7 @@ declare global {
   type IsNever<T> = [T] extends [never] ? true : false
   type Prettify<T> = {[K in keyof T]: T[K]} & {}
   type Literal<T, U> = T | (U & Prettify<{}>)
-  type ValueOf<T> = T extends readonly unknown[] ? T[number] : T[keyof T]
+  type ValueOf<T> = T extends AnyArray ? T[number] : T[keyof T]
   type SyncFn<P extends AnyArray = [], R = void> = (...args: P) => R
   type AsyncFn<P extends AnyArray = [], R = void> = (...args: P) => Promise<R>
 

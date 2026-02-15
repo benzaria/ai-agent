@@ -1,5 +1,5 @@
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util'
-import { echo } from '../utils/helpers.ts'
+import { echo } from '../utils/tui.ts'
 import { env } from '../utils/config.ts'
 
 declare global {
@@ -18,60 +18,60 @@ declare global {
 
 const options = {
 
-  headed: {
-    short: 'h',
-    type: 'boolean',
-    default: false,
-  },
+	headed: {
+		short: 'h',
+		type: 'boolean',
+		default: false,
+	},
 
-  'new-conv': {
-//  short: 'nc',
-    type: 'boolean',
-    default: false,
-  },
-  
-  'best-conv': {
-//  short: 'bc',
-    type: 'boolean',
-    default: false,
-  },
+	'new-conv': {
+		//  short: 'nc',
+		type: 'boolean',
+		default: false,
+	},
 
-  verbose: {
-    short: 'v',
-    type: 'boolean',
-    default: false,
-  },
+	'best-conv': {
+		//  short: 'bc',
+		type: 'boolean',
+		default: false,
+	},
 
-  port: {
-    short: 'p',
-    type: 'string',
-    default: ''+env.port,
-  },
+	verbose: {
+		short: 'v',
+		type: 'boolean',
+		default: false,
+	},
 
-  model: {
-    short: 'm',
-    type: 'string',
-    default: env.model,
-  },
+	port: {
+		short: 'p',
+		type: 'string',
+		default: ''+env.port,
+	},
+
+	model: {
+		short: 'm',
+		type: 'string',
+		default: env.model,
+	},
 
 } as const satisfies ParseArgsOptionsConfig
 
 const multiShortMap = {
-  '-nc': '--new-conv',
-  '-bc': '--best-conv',
+	'-nc': '--new-conv',
+	'-bc': '--best-conv',
 } as const satisfies Record<`-${string}`, `--${string}`>
 
 const preParseArgv = (argv: string[]) => argv.map(
-  arg => (multiShortMap as any)[arg] ?? arg
+	arg => (multiShortMap as any)[arg] ?? arg
 )
 
 const { values, positionals } = parseArgs({
-  args: preParseArgv(process.argv.slice(2)),
-  allowPositionals: true,
-  options,
+	args: preParseArgv(process.argv.slice(2)),
+	allowPositionals: true,
+	options,
 })
 
-const _args: typeof args = {...values as any}
+const _args: typeof args = { ...values as any }
 delete (_args as any)['headed']
 _args.headless = values.headed === true ? false : 'new'
 

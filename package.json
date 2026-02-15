@@ -6,8 +6,9 @@
   "bin": "src/cli/chat_tui.ts",
   "type": "module",
   "scripts": {
-    "push": "pwsh -nop \"scripts/publish.ps1\"",
-    "prepush": "pnpm check-all",
+    "prepush": "pnpm run-checks",
+    "push": "pnpm push:skip-check",
+    "push:skip-check": "pwsh -nop \"scripts/publish.ps1\"",
     "start": "node .",
     "start:agent": "node ./src/agent/main.ts",
     "start:chat": "node ./src/cli/chat_tui.ts",
@@ -16,13 +17,16 @@
     "test:bot": "node ./src/model/bot.ts",
     "test:channel:ws": "node ./src/channels/whatsapp/ws.ts",
     "test:channel:tl": "node ./src/channels/telegram/tl.ts",
-    "check-all": "pnpm type-check && pnpm lint-check",
-    "type-check": "tsc --noEmit",
+    "run-checks": "pnpm type-check && pnpm lint-check",
     "lint-check": "eslint ./src",
-    "compile": "tsc",
-    "lint": "eslint ./src --fix"
+    "type-check": "tsc --noEmit",
+    "lint": "eslint ./src --fix",
+    "compile": "tsc"
   },
-  "keywords": ["ai", "agent"],
+  "keywords": [
+    "ai",
+    "agent"
+  ],
   "author": "benzaria",
   "license": "MIT",
   "packageManager": "pnpm@10.29.3",
@@ -42,13 +46,15 @@
   "dependencies": {
     "baileys": "7.0.0-rc.9",
     "body-parser": "^2.2.2",
+    "chalk": "^5.6.2",
     "express": "^5.2.1",
     "grammy": "^1.39.3",
     "pino": "^10.3.1",
     "puppeteer": "^24.37.2",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "string.chalk": "^1.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

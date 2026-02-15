@@ -5,7 +5,7 @@ import { delay, echo } from '../src/utils/helpers.ts'
 global.args.verbose = true
 
 echo('test_start')
-
+echo.ln('test')
 
 echo.inf.lr('test_1___')
 echo.inf('test_2')

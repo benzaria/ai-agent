@@ -29,7 +29,7 @@ if (-not $branch) {
 $date = Get-Date -Format 'ddd dd/MM/yy - hh:mm tt'
 
 $_force = $force ? '--force' : $null
-$_message = $message ? "$message" : "push ``$repo`` **$date**"
+$_message = $message ? "$message" : "push ``$repo`` $date"
 
 git add .
 

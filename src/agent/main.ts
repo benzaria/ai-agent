@@ -1,13 +1,13 @@
 import '../cli/arguments.ts'
 
+import { echo } from '../utils/tui.ts'
 import { initWASocket } from '../channels/whatsapp/ws.ts'
-import { echo } from '../utils/helpers.ts'
 import { initBot } from '../model/bot.ts'
 
 async function initAgent() {
 
-  await initWASocket()
-  await initBot()
+	await initWASocket()
+	await initBot()
 
 }
 
