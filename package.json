@@ -1,71 +1,72 @@
 {
-  "name": "ai-agent",
-  "version": "2.3.0",
-  "description": "AI Agent",
-  "main": "src/agent/main.ts",
-  "bin": "src/cli/chat_tui.ts",
-  "type": "module",
-  "scripts": {
-    "prepush": "pnpm run-checks",
-    "push": "pnpm push:skip-check",
-    "push:skip-check": "pwsh -nop \"scripts/publish.ps1\"",
-    "start": "node .",
-    "start:agent": "node ./src/agent/main.ts",
-    "start:chat": "node ./src/cli/chat_tui.ts",
-    "start:api": "node ./src/model/api.ts",
-    "test": "pwsh -nop \"scripts/run.ps1\" -dir test -file",
-    "test:bot": "node ./src/model/bot.ts",
-    "test:channel:ws": "node ./src/channels/whatsapp/ws.ts",
-    "test:channel:tl": "node ./src/channels/telegram/tl.ts",
-    "run-checks": "pnpm type-check && pnpm lint-check",
-    "lint-check": "eslint ./src",
-    "type-check": "tsc --noEmit",
-    "lint": "eslint ./src --fix",
-    "compile": "tsc"
-  },
-  "keywords": [
-    "ai",
-    "agent"
-  ],
-  "author": "benzaria",
-  "license": "MIT",
-  "packageManager": "pnpm@10.29.3",
-  "engines": {
-    "node": ">=22"
-  },
-  "engineStrict": true,
-  "devEngines": {
-    "runtime": [
-      {
-        "name": "node",
-        "version": ">=22",
-        "onFail": "warn"
-      }
-    ]
-  },
-  "dependencies": {
-    "baileys": "7.0.0-rc.9",
-    "body-parser": "^2.2.2",
-    "chalk": "^5.6.2",
-    "express": "^5.2.1",
-    "grammy": "^1.39.3",
-    "pino": "^10.3.1",
-    "puppeteer": "^24.37.2",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "qrcode-terminal": "^0.12.0",
-    "string.chalk": "^1.2.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.2.1",
-    "@types/qrcode-terminal": "^0.12.2",
-    "@typescript-eslint/eslint-plugin": "^8.55.0",
-    "@typescript-eslint/parser": "^8.55.0",
-    "eslint": "^10.0.0",
-    "globals": "^17.3.0",
-    "jiti": "^2.6.1",
-    "typescript": "^5.9.3"
-  }
+	"name": "ai-agent",
+	"version": "2.3.0",
+	"description": "AI Agent",
+	"main": "src/agent/main.ts",
+	"bin": "src/cli/chat_tui.ts",
+	"type": "module",
+	"scripts": {
+		"prepush": "pnpm run-checks",
+		"push": "pnpm push:skip-check",
+		"push:skip-check": "pwsh -nop \"scripts/publish.ps1\"",
+		"start": "node .",
+		"start:agent": "node ./src/agent/main.ts",
+		"start:chat": "node ./src/cli/chat_tui.ts",
+		"start:api": "node ./src/model/api.ts",
+		"test": "pwsh -nop \"scripts/run.ps1\" -dir test -file",
+		"test:bot": "node ./src/model/bot.ts",
+		"test:channel:ws": "node ./src/channels/whatsapp/ws.ts",
+		"test:channel:tl": "node ./src/channels/telegram/tl.ts",
+		"run-checks": "pnpm type-check && pnpm lint-check",
+		"lint-check": "eslint",
+		"type-check": "tsc --noEmit",
+		"lint": "eslint --fix",
+		"compile": "tsc"
+	},
+	"keywords": [
+		"ai",
+		"agent"
+	],
+	"author": "benzaria",
+	"license": "MIT",
+	"packageManager": "pnpm@10.29.3",
+	"engines": {
+		"node": ">=22"
+	},
+	"engineStrict": true,
+	"devEngines": {
+		"runtime": [
+			{
+				"name": "node",
+				"version": ">=22",
+				"onFail": "warn"
+			}
+		]
+	},
+	"dependencies": {
+		"@benzn/to-ms": "^3.0.9",
+		"baileys": "7.0.0-rc.9",
+		"body-parser": "^2.2.2",
+		"chalk": "^5.6.2",
+		"express": "^5.2.1",
+		"grammy": "^1.39.3",
+		"pino": "^10.3.1",
+		"puppeteer": "^24.37.2",
+		"puppeteer-extra": "^3.3.6",
+		"puppeteer-extra-plugin-stealth": "^2.11.2",
+		"qrcode-terminal": "^0.12.0",
+		"string.chalk": "^1.2.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/express": "^5.0.6",
+		"@types/node": "^25.2.1",
+		"@types/qrcode-terminal": "^0.12.2",
+		"@typescript-eslint/eslint-plugin": "^8.55.0",
+		"@typescript-eslint/parser": "^8.55.0",
+		"eslint": "^10.0.0",
+		"globals": "^17.3.0",
+		"jiti": "^2.6.1",
+		"typescript": "^5.9.3"
+	}
 }

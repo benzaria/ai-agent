@@ -15,8 +15,8 @@ import {
 
 import { join } from 'node:path'
 import { env } from '../../utils/config.ts'
+import { echo, Color } from '../../utils/tui.ts'
 import { delay, queue, lazy, voidFn } from '../../utils/helpers.ts'
-import { echo } from '../../utils/tui.ts'
 
 type CreateSocketOpts = {
   authDir?: string
@@ -31,12 +31,12 @@ const getQR = lazy(async () => (await import('qrcode-terminal')).default)
 const getPino = lazy(async () => (await import('pino')).default)
 
 const qsaveCreds = queue(async (saveCreds: AsyncFn) => {
-	echo.inf('Save creds')
+	echo.vrb([Color.BLUE, 'Creds'], 'Save')
 	await saveCreds()
 })
 
 async function backupCreds(authDir: string) {
-	echo.inf('Backup creds')
+	echo.vrb.lr([Color.BLUE, 'Creds'], 'Backup')
 
 	const creds = join(authDir, 'creds.json')
 	const backup = join(authDir, 'creds.backup.json')
@@ -57,7 +57,7 @@ async function restoreCredsIfCorrupted(authDir: string) {
 		JSON.parse(await readFile(creds, 'utf-8'))
 	} catch {
 		await copyFile(backup, creds)
-			.then(() => echo.wrn('Restore creds from backup.'))
+			.then(() => echo.vrb([Color.YELLOW, 'Creds'], 'Restore creds from backup.'))
 			.catch(echo.err)
 	}
 }

@@ -1,7 +1,7 @@
-import { actions, push, type ActionsType } from './actions.ts'
+import { actions, type ActionsType } from './actions.ts'
 import { type MsgData } from '../channels/whatsapp/ws.ts'
-import { echo } from '../utils/tui.ts'
 import { env } from '../utils/config.ts'
+import { echo } from '../utils/tui.ts'
 
 async function parser(data: MsgData & { response: string }) {
 	const { response } = data
@@ -12,7 +12,7 @@ async function parser(data: MsgData & { response: string }) {
 		if (Array.isArray(resJSON)) {
 			resJSON.reduce(
 				async (output: AnyArray, action: ActionsType, index) => {
-					echo.vrb([94, 'action'], action, '\n')
+					echo.vrb([94, 'action'], action)
 
 					return await runAction({ ...data, ...action }, output, index)
 				},
@@ -23,12 +23,12 @@ async function parser(data: MsgData & { response: string }) {
 			await runAction({ ...data, ...resJSON })
 		}
 
-	} catch (err) {
-		if (Error.isError(err) && err.message.includes('is not valid JSON')) {
+	} catch (err: any) {
+		if (err.message.includes('is not valid JSON')) {
 			runAction({
 				...data,
-				action: 'talk',
-				text: response,
+				action: 'web_search',
+				result: response,
 			})
 		}
 		else {
@@ -47,24 +47,26 @@ async function runAction(
 	if (
 		!env.safe_actions.includes(action) &&
     !env.auth_users.includes(uJid)
-	) return push({
+	) return runAction({
 		...data,
 		action: 'error',
 		error: 'UNAUTHORIZED_USER',
 		details: `Unauthorized users can NOT preforme '${action}' actions!`,
 		suggested_fix: `Ask agent owner '${env.owner_name}' for permission.`,
+		missing_fields: [],
 	})
 
-	const fn = actions[action.toLowerCase() as keyof typeof actions] as AsyncFn<any[], any>
+	const fn = actions[action] as SyncFn<any[], any>
 
 	return fn
 		? fn.apply({ ...data, output })
-		: push({
+		: runAction({
 			...data,
 			action: 'error',
 			error: 'UNSUPPORTED_ACTION',
 			details: `Requested action '${action}' is not inplemented yet!`,
 			suggested_fix: 'Write the corresponding TS code to acheive this behavior.',
+			missing_fields: [],
 		})
 }
 

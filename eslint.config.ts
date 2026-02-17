@@ -8,7 +8,7 @@ export default defineConfig(
 
 	// Base config
 	{
-		files: ['src/**/*.{js,mjs,cjs,ts,mts,cts}'],
+		files: ['src/**/*.{json,jsonc,js,mjs,cjs,ts,mts,cts}'],
 		ignores: ['node_modules', 'dist', '.history'],
 
 		languageOptions: {
@@ -50,7 +50,7 @@ export default defineConfig(
 				ignoreComments: false
 			}],
 
-			'no-multiple-empty-lines': ['error', {max: 2, maxEOF: 0, maxBOF: 1}],
+			'no-multiple-empty-lines': ['error', { max: 2, maxEOF: 0, maxBOF: 1 }],
 			'no-mixed-spaces-and-tabs': ['error', 'smart-tabs'],
 			// 'comma-dangle': ['error', 'always-multiline'],
 			'array-bracket-spacing': ['error', 'never'],
@@ -65,11 +65,22 @@ export default defineConfig(
 		},
 	},
 
+	// Override for just one file
 	{
-		files: ['src/utils/tui.ts'], // override for just one file
+		files: ['src/utils/tui.ts'],
 		rules: {
 			'no-console': 'off',
 		},
+	},
+
+	// JSON override
+	{
+		files: ['src/**/*.{json,jsonc}'],
+
+		rules: {
+			'quotes': ['error', 'double'],
+			'eol-last': 'off',
+		}
 	},
 
 	// JS override

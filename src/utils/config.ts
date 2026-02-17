@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { echo } from './tui.ts'
+import '@benzn/to-ms/extender'
 
 type Secrets = typeof import('./secrets_alt.json')
 
@@ -49,6 +50,7 @@ type Config = {
     port: number
     timeout: number
     model: Models
+		persona: Personas
     userAgent: string
   } & Secrets
 
@@ -93,8 +95,9 @@ const env = {
 	home: homedir(),
 	cwd: cwd(),
 	port: 3000,
-	timeout: 90000,
+	timeout: '1.5'.m,
 	model: 'openai/gpt-5-mini',
+	persona: 'jarvis',
 	userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 	...secrets
 } as const satisfies Config['env']

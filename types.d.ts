@@ -1,9 +1,9 @@
 
-import { Page, Browser } from 'puppeteer'
-import { providers } from './src/utils/config.ts'
-import { WS } from './src/channels/whatsapp/wa-socket.ts'
+import type { WS } from './src/channels/whatsapp/wa-socket.ts'
+import type { Page, Browser } from 'puppeteer'
 
-type __providers = typeof providers
+type __providers = typeof import('./src/utils/config.ts').providers
+type __personas = typeof import('./src/agent/instructions.ts')
 
 declare global {
 
@@ -12,6 +12,7 @@ declare global {
   var page: Page
   var provider: Providers
   var model: LLMs
+  var persona: Personas
   var instructions: object
   var ws: WS
   var typing: number
@@ -34,6 +35,7 @@ declare global {
   type EmptyArray = readonly []
 
   type Providers = keyof __providers
+  type Personas = Exclude<keyof __personas, 'instructions'>
   type LLMs = __providers[Providers]['models'][number]
   type Models = {
     [K in Providers]: `${K}/${__providers[K]['models'][number]}`

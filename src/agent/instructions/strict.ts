@@ -1,4 +1,4 @@
-import { code, string, type Instructions } from './consts.ts'
+import { code, string, type InstructionsType } from './consts.ts'
 import { env } from '../../utils/config.ts'
 
 const strict = {
@@ -360,6 +360,6 @@ const strict = {
 		'Never include comments',
 		'Never include trailing commas'
 	]
-} as const satisfies Instructions
+} as const satisfies InstructionsType
 
 export { strict }

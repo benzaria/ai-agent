@@ -1,5 +1,5 @@
 
-type Instructions = {
+type InstructionsType = {
   [x: string]: any
   actions: {
     [x: string]: any
@@ -13,8 +13,11 @@ type Instructions = {
   }[]
 }
 
+type Instructions = Record<Personas, InstructionsType>
+
 export type {
-	Instructions
+	InstructionsType,
+	Instructions,
 }
 
 const string: string = 'string'

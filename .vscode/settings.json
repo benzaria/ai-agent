@@ -1,14 +1,14 @@
 {
-    "files.exclude": {
-        "**/.git": true,
-        "**/.svn": true,
-        "**/.hg": true,
-        "**/.DS_Store": true,
-        "**/Thumbs.db": true,
-        "node_modules": true,
-        "pnpm-lock.*": true,
-        "pnpm-workspace.*": true,
-        ".vscode": true,
-        "**/__._*": true
-    }
+	"files.exclude": {
+		"**/.git": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/.DS_Store": true,
+		"**/Thumbs.db": true,
+		"node_modules": true,
+		"pnpm-lock.*": true,
+		"pnpm-workspace.*": true,
+		".vscode": true,
+		"**/__._*": true
+	}
 }

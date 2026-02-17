@@ -1,15 +1,17 @@
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util'
-import { echo } from '../utils/tui.ts'
 import { env } from '../utils/config.ts'
+import { echo } from '../utils/tui.ts'
 
 declare global {
 	const args: Prettify<
     Omit<
       Required<typeof values>,
-      'headed' | 'model'
+      'headed' | 'model' | 'persona' | 'port'
     > & {
       headless: boolean | 'new'
       model: Models
+			persona: Personas
+			port: number
     }
   >
 
@@ -43,7 +45,7 @@ const options = {
 	},
 
 	port: {
-		short: 'p',
+		short: 'P',
 		type: 'string',
 		default: ''+env.port,
 	},
@@ -54,15 +56,22 @@ const options = {
 		default: env.model,
 	},
 
+	persona: {
+		short: 'p',
+		type: 'string',
+		default: env.persona,
+	}
+
 } as const satisfies ParseArgsOptionsConfig
 
-const multiShortMap = {
+const argsMap = {
 	'-nc': '--new-conv',
 	'-bc': '--best-conv',
-} as const satisfies Record<`-${string}`, `--${string}`>
+	'--headless': '',
+} as const satisfies Record<`-${string}`, `--${string}` | ''>
 
 const preParseArgv = (argv: string[]) => argv.map(
-	arg => (multiShortMap as any)[arg] ?? arg
+	arg => (argsMap as any)[arg] ?? arg
 )
 
 const { values, positionals } = parseArgs({
@@ -75,9 +84,9 @@ const _args: typeof args = { ...values as any }
 delete (_args as any)['headed']
 _args.headless = values.headed === true ? false : 'new'
 
-// @ts-ignore
+// @ts-expect-error Property 'args' does not exist on type 'typeof globalThis'.
 global.args = _args
-// @ts-ignore
+// @ts-expect-error Property '__args' does not exist on type 'typeof globalThis'.
 global.__args = positionals
 
-if (args.verbose) echo('args:', _args)
+if (args.verbose) echo.inf('args:', { ..._args, headless: !values.headed })

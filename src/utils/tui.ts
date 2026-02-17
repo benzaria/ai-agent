@@ -266,4 +266,6 @@ export {
 	echoMap,
 	color,
 	color256,
+	Color,
+	Ansi,
 }

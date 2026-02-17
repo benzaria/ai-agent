@@ -13,12 +13,12 @@ import {
 	type WAMessage,
 } from 'baileys'
 
-import { reply as auto_reply } from '../../agent/actions/actions.ts'
+import { reply as auto_reply } from '../../agent/actions/consts.ts'
 import { queue, delay } from '../../utils/helpers.ts'
 import { parser } from '../../agent/interaction.ts'
 import { env } from '../../utils/config.ts'
 import { chat } from '../../model/bot.ts'
-import { echo } from '../../utils/tui.ts'
+import { Color, echo } from '../../utils/tui.ts'
 import { inspect } from 'node:util'
 
 type MsgData = Prettify<
@@ -69,7 +69,7 @@ function initListeners(ws: WS = global.ws) {
 			// Get message uJid
 			const uJid = jidNormalizedUser(msg.key.remoteJidAlt || msg.key.remoteJid!)
 			const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
-			const request = msg.message?.conversation || msg.message?.extendedTextMessage?.text || 'NEVER'
+			const request = msg.message?.conversation || msg.message?.extendedTextMessage?.text || 'undefined'
 
 			const isp = args.verbose && inspect(msg,
 				{
@@ -125,8 +125,9 @@ async function groupHandler(data: MsgData) {
 
 const reply = queue(
 	async function (data: MsgData) {
-		const { uJid, gJid, msg: { key, message }, request, mentions } = data
-		const quoted = message?.extendedTextMessage?.contextInfo?.quotedMessage ?? undefined
+		const { uJid, gJid, msg: { key, message }, request, mentions: ment } = data
+		const quoted = message?.extendedTextMessage?.contextInfo?.quotedMessage || undefined
+		const mentions = ment.length ? ment : undefined
 
 		// Mark as Read
 		ws.readMessages([key!])
@@ -158,15 +159,15 @@ function startTyping(jid: string, interval = 500, timeout = 5000) {
 
 	const start = () => {
 		ws.sendPresenceUpdate('composing', jid)
+		echo.vrb([Color.BR_GREEN, 'typing'], 'started')
 		global.typing = timeout
-		echo.vrb([92, 'typing'], 'started')
 	}
 
 	const stop = () => {
 		clearInterval(id)
 		ws.sendPresenceUpdate('paused', jid)
+		!global.typing || echo.vrb([Color.BR_GREEN, 'typing'], 'stoped')
 		global.typing = 0
-		echo.vrb([92, 'typing'], 'stoped')
 	}
 
 	const id = setInterval(() => {
@@ -174,7 +175,7 @@ function startTyping(jid: string, interval = 500, timeout = 5000) {
 		global.typing -= interval
 	}, interval)
 
-	delay(20_000, stop)
+	delay('2'.m, stop)
 
 	return { stop }
 }

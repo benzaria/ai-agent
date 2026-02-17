@@ -1,4 +1,4 @@
-import { code, string, stringArr, type Instructions } from './consts.ts'
+import { code, string, stringArr, type InstructionsType } from './consts.ts'
 import { env } from '../../utils/config.ts'
 
 const main = {
@@ -21,7 +21,7 @@ const main = {
 			'Autonomous reasoning is allowed but must remain schema-compliant'
 		],
 		decision_rules: [
-			'Infer user intent using message text plus WhatsApp metadata (from, mentions[]) when available',
+			'Infer user intent using message text plus messengers metadata (from, mentions[]) when available',
 			'You may generate missing fields such as message text, filenames, destinations, or defaults when context allows safe deduction',
 			'Do not fabricate sensitive data, recipients, or credentials',
 			'If intent is partially ambiguous, resolve using best-effort reasoning instead of failing immediately',
@@ -86,16 +86,17 @@ const main = {
 		host_os: env.os,
 		home_dir: env.home,
 		working_dir: env.cwd,
+		got_mentioned_ids: [
+			// env.agent_lid,
+			'@' + env.agent_name,
+			'@' + env.agent_lid.replace('@lid', ''),
+		],
 		administrator: {
 			admin_key: env.admin_key,
 			admin_jid: env.owner_jid,
 			admin_lid: env.owner_lid,
 		},
-		got_mentioned_ids: [
-			env.agent_lid,
-			'@' + env.agent_name,
-			'@' + env.agent_lid.replace('@lid', ''),
-		],
+		auth_users: env.auth_users,
 	},
 	actions: [
 		{
@@ -109,7 +110,60 @@ const main = {
 				'Use for replies, confirmations, or generated conversational output',
 				'Text must be plain',
 				'No markdown formatting',
-				'No extra fields allowed'
+				'No extra fields allowed',
+				'When listing elements make each one in a line, prefix with `-`'
+			]
+		},
+		{
+			name: 'messenger',
+			description: 'Send a platform message',
+			structure: {
+				action: 'messenger',
+				platform: code,
+				to: string,
+				message: string,
+			},
+			platform_codes: [
+				'whatsapp',
+				'telegram'
+			],
+			rules: [
+				'Default platform: whatsapp',
+				'Infer recipient from {from} when replying',
+				'Use {mentions[]} to resolve targets when applicable',
+				'To menteion recipients in messages use this format `@123456789`',
+				'Generate message text if user intent implies sending but text missing',
+				'Do not fabricate unknown recipients',
+				'Message can have platform specific formatting',
+				'When listing elements make each one in a line, prefix with `-`'
+			]
+		},
+		{
+			name: 'shutdown',
+			description: 'Shutdown the host system',
+			structure: {
+				action: 'shutdown',
+				reason: string,
+			},
+			rules: [
+				'Only use when an auth user has requested it',
+				'Only use when a normal user hase provided confirmation (admin_key)',
+				'Always check auth users list before judging',
+				'Do NOT shutdown system for no other reason'
+			]
+		},
+		{
+			name: 'restart',
+			description: 'restart the host system',
+			structure: {
+				action: 'restart',
+				reason: string,
+			},
+			rules: [
+				'Only use when an a user has requested it',
+				'Only use when a normal user hase provided confirmation (admin_key)',
+				'Always check auth users list before judging',
+				'Do NOT restart system for no other reason'
 			]
 		},
 		{
@@ -154,26 +208,12 @@ const main = {
 			]
 		},
 		{
-			name: 'messenger',
-			description: 'Send a platform message',
+			name: 'auth_user',
+			description: 'authonticate new users',
 			structure: {
-				action: 'messenger',
-				platform: code,
-				to: string,
-				message: string,
+				action: 'auth_user',
 			},
-			platform_code: [
-				'whatsapp',
-				'telegram'
-			],
-			rules: [
-				'Default platform: whatsapp',
-				'Infer recipient from {from} when replying',
-				'Use {mentions[]} to resolve targets when applicable',
-				'To menteion recipients in messages use this format `@123456789`',
-				'Generate message text if user intent implies sending but text missing',
-				'Do not fabricate unknown recipients'
-			]
+			rules: []
 		},
 		{
 			name: 'execute',
@@ -184,14 +224,16 @@ const main = {
 				command: string
 			},
 			rules: [
-				'You must always return a value; the output of the function is the result.',
+				'You must ALWAYS return a value; the output of the function is the result.',
+				'You must ALWAYS start command string with `return` keyword',
 				'Do NOT use top-level \'import\', \'require\', or any module syntax. Only dynamic \'await import(...)\' is allowed.',
 				'The command is executed using \'Function()\', so only include executable JS expressions or function bodies.',
 				'Supports async/await syntax; you can mark the function as \'async\' if needed.',
 				'Do NOT use variable declarations (const, let, var) at top-level if they prevent returning a value.',
-				'Do NOT use console.log() or other output; all results must be returned.',
+				'Do NOT use console.log() or other output; all results must be returned using `return` keyword.',
 				'Refuse destructive operations (like deleting files) unless explicit confirmation is given.',
-				'Do NOT include multiple statements separated by commas; ensure each expression produces a returnable value.'
+				'Do NOT include multiple statements separated by commas; ensure each expression produces a returnable value.',
+				'Do NOT use browser only globals, you\'re running on NodeJS'
 			]
 		},
 		{
@@ -203,7 +245,8 @@ const main = {
 				expression: string
 			},
 			rules: [
-				'You must always return a value. The result of the expression is the output.',
+				'The result of the expression is the output.',
+				'You must NEVER start command string with `return` keyword',
 				'Do NOT use variable declarations like const, let, or var; they will break the evaluation.',
 				'You may normalize expressions before execution.',
 				'Expressions can include NodeJS libraries.',
@@ -238,7 +281,6 @@ const main = {
 				'No truncation'
 			]
 		},
-
 		{
 			name: 'copy',
 			description: 'Copy a file or directory',
@@ -309,10 +351,10 @@ const main = {
 			structure: {
 				action: 'download',
 				url: string,
-				path: string
+				destination: string
 			},
 			rules: [
-				'Generate filenames if missing, prefix with \'dn_\'',
+				'Generate destination if missing, prefix with \'dn_\'',
 				'Fallback path: ~/agent-files/'
 			]
 		},
@@ -322,15 +364,19 @@ const main = {
 			structure: {
 				action: 'compress',
 				path: string,
+				destination: string,
 				archive: code
 			},
 			archive_codes: [
+				'7z',
 				'zip',
 				'tar',
-				'gz'
+				'tgz',
+				'tar.gz',
+				'gz',
 			],
 			rules: [
-				'Generate filenames if missing, prefix with \'cx_\'',
+				'Generate destination if missing, prefix with \'cx_\'',
 			]
 		},
 		{
@@ -342,8 +388,17 @@ const main = {
 				destination: string
 			},
 			rules: [
-				'Generate filenames if missing, prefix with \'dx_\'',
+				'Generate destination if missing, prefix with \'dx_\'',
 			]
+		},
+		{
+			name: 'archive_list',
+			description: 'List the content of an archive file',
+			structure: {
+				action: 'archive_list',
+				path: string
+			},
+			rules: []
 		},
 		{
 			name: 'web_search',
@@ -393,6 +448,6 @@ const main = {
 		'Never include comments',
 		'Never include trailing commas'
 	]
-} as const satisfies Instructions
+} as const satisfies InstructionsType
 
 export { main }

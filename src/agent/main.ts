@@ -1,6 +1,5 @@
 import '../cli/arguments.ts'
 
-import { echo } from '../utils/tui.ts'
 import { initWASocket } from '../channels/whatsapp/ws.ts'
 import { initBot } from '../model/bot.ts'
 

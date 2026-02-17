@@ -1,10 +1,10 @@
 import '../cli/arguments.ts'
 import puppeteer from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+import { instructions, type Instructions, type InstructionsType } from '../agent/instructions.ts'
 import { providers, env, saveSecrets } from '../utils/config.ts'
 import { template, delay } from '../utils/helpers.ts'
-import { echo } from '../utils/tui.ts'
-import { main } from '../agent/instructions.ts'
+import { Color, echo } from '../utils/tui.ts'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -65,9 +65,11 @@ async function initProvider(model: Models) {
 		await page.bringToFront()
 		await page.goto(
 			providers[provider]['api'] + (
-				args['new-conv'] ? '' :
-					args['best-conv'] && env.best_conversation ? `c/${env.best_conversation}` :
-						env.conversation ? `c/${env.conversation}` : ''
+				/* eslint-disable indent */
+					args['new-conv'] ? '' :
+					args['best-conv'] && env.best_conversation ? `c/${env.best_conversation.uuid}` :
+					env.conversation ? `c/${env.conversation.uuid}` : ''
+				/* eslint-enable indent */
 			),
 			{ waitUntil: 'domcontentloaded', timeout: env.timeout }
 		)
@@ -96,13 +98,16 @@ async function initProvider(model: Models) {
 	}
 }
 
-async function initModel(instructions: object) {
+async function initModel(instructions: InstructionsType): Promise<void>;
+async function initModel(instructions: Instructions, persona: Personas): Promise<void>;
+async function initModel(instructions: Instructions | InstructionsType, persona?: Personas) {
 	echo.inf.lr('Initializing Model...')
-	global.instructions = instructions
+	global.instructions = persona ? instructions[persona] : instructions
+	global.persona = persona ?? args.persona
 
 	const verbose = args.verbose
 	args.verbose = false
-	const res = await chat({ request: 'status', ...instructions })
+	const res = await chat({ request: 'status', ...global.instructions })
 	args.verbose = verbose
 
 	if (res?.includes('OK'))
@@ -114,8 +119,11 @@ async function initModel(instructions: object) {
 		return location.pathname.startsWith('/c/')
 	}, { timeout: env.timeout })
 
-	const conversation = page.url().split('/c/')[1]
-	echo.inf('Conversation UUID:', conversation)
+	const conversation = {
+		persona: global.persona,
+		uuid: page.url().split('/c/')[1]
+	}
+	echo.inf('Conversation:', conversation)
 
 	saveSecrets({ conversation })
 }
@@ -147,7 +155,7 @@ async function ask(q: Query) {
 		return lastMessage ? lastMessage.innerText.trim() : 'Could not find response.'
 	}, providers[provider]['selector'].response)
 
-	echo.vrb([32, 'RESPONSE'],
+	echo.vrb([Color.GREEN, 'response'],
 		'\n-------------------------\n' +
     response +
     '\n-------------------------\n'
@@ -161,7 +169,8 @@ async function chat(p: object | string) {
 	if (!global.provider) return initPrblm('Provider', 'err')
 	if (!global.instructions) initPrblm('Model', 'wrn')
 
-	const prompt = JSON.stringify(typeof p === 'string' ? { request: p } : p)
+	const request = typeof p === 'string' ? { request: p } : p
+	const prompt = JSON.stringify(request)
 
 	await page.evaluate((text: string, selector: string) => {
 		const textarea = document.querySelector(selector) as HTMLTextAreaElement
@@ -170,6 +179,8 @@ async function chat(p: object | string) {
 			textarea.dispatchEvent(new Event('input', { bubbles: true }))
 		}
 	}, prompt, providers[provider]['selector'].request)
+
+	echo.vrb([Color.BR_BLUE, 'request'], request)
 
 	await delay(200)
 	await page.click(providers[provider]['selector'].sendBtn)
@@ -187,7 +198,7 @@ async function chat(p: object | string) {
 		return (responseBlock ? responseBlock.innerText : lastMessage.innerText).trim()
 	}, providers[provider]['selector'])
 
-	echo.vrb([32, 'RESPONSE'],
+	echo.vrb([Color.GREEN, 'response'],
 		'\n-------------------------\n' +
     response +
     '\n-------------------------\n'
@@ -204,7 +215,15 @@ const initPrblm = (step: 'Page' | 'Provider' | 'Model', level: 'err' | 'wrn') =>
 async function initBot() {
 	await initPage(args.headless)
 	await initProvider(args.model)
-	await initModel(main)
+	await initModel(
+		instructions, (
+			/* eslint-disable indent */
+				args['new-conv'] ? args.persona :
+				args['best-conv'] && env.best_conversation ? env.best_conversation.persona :
+				env.conversation ? env.conversation.persona : args.persona
+			/* eslint-enable indent */
+		) as Personas
+	)
 }
 
 // This ensures it only runs if called directly
