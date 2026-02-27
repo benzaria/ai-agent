@@ -1,4 +1,4 @@
-import '../cli/arguments.ts'
+import '../cli/args.ts'
 
 import { initWASocket } from '../channels/whatsapp/ws.ts'
 import { initBot } from '../model/bot.ts'
@@ -6,7 +6,7 @@ import { initBot } from '../model/bot.ts'
 async function initAgent() {
 
 	await initWASocket()
-	// await initBot()
+	await initBot()
 
 }
 

@@ -4,24 +4,27 @@ import type { Page, Browser } from 'puppeteer'
 
 type __providers = typeof import('./src/utils/config.ts').providers
 type __personas = typeof import('./src/agent/instructions.ts')
+type __contacts = typeof import('./agent-files/contact.json')
 
 declare global {
 
-  var isCLI: boolean
-  var shutdown: AsyncFn<never, never>
-  var browser: Browser
-  var page: Page
-  var provider: Providers
-  var model: LLMs
-  var persona: Personas
-  var instructions: object
   var ws: WS
+  var page: Page
+  var model: LLMs
+  var isCLI: boolean
   var typing: number
-  var contacts: Record<string, number>
+  var browser: Browser
+  var persona: Personas
+  var provider: Providers
+  var instructions: object
+  var shutdown: AsyncFn<never, never>
+  var contacts: Record<string, number> | __contacts
 
-  type Prettify<T> = {[K in keyof T]: T[K]} & {}
+  type Prettify<T> = T extends AnyFunction ? T : {[K in keyof T]: T[K]}
+
   type Literal<T extends U, U> = T | (U & Prettify<{}>)
-  type ValueOf<T> = T extends AnyArray ? T[number] : T[keyof T]
+  type ValueOf<T> = T extends readonly any[] ? T[number] : T[keyof T]
+  type Returns<T> = T extends SyncFn<AnyArray, infer R> ? R : never
 
   type Promisify<T extends AnyFunction> =
     T extends (this: infer T, ...args: infer P) => infer R
@@ -48,10 +51,19 @@ declare global {
       : never
 
   type AsyncFn<P extends AnyArray = [], R = void, T = unknown> = SyncFn<P, Promise<R>, T>
-    
+
+  type DefineProperties<O, P extends PropertyDescriptorMap> = Prettify<O &
+    {
+      [K in keyof P]:
+        'get' extends keyof P[K]
+          ? Returns<P[K]['get']>
+          : P[K]['value']
+    }
+  >
+
   type _ = '_'
   type VoidFn = (...args: AnyArray) => void
-  type AnyArray = readonly any[]
+  type AnyArray = any[]
   type AnyRecord = {[x in any]: any}
   type AnyFunction = (...args: AnyArray) => any
   type EmptyObject = {}

@@ -23,8 +23,10 @@ export type {
 const string: string = 'string'
 const stringArr: string[] = [string]
 const code = string as never
+const op = <const T>(x?: T): T | undefined => x
 
 export {
+	op,
 	code,
 	string,
 	stringArr,

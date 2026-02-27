@@ -1,6 +1,6 @@
 {
 	"name": "ai-agent",
-	"version": "2.3.0",
+	"version": "3.0.0",
 	"description": "AI Agent",
 	"main": "src/agent/main.ts",
 	"bin": "src/cli/chat_tui.ts",
@@ -30,7 +30,12 @@
 	},
 	"keywords": [
 		"ai",
-		"agent"
+		"bot",
+		"agent",
+		"ai-agent",
+		"ai-bot",
+		"ai-chat",
+		"chat-bot"
 	],
 	"author": "benzaria",
 	"license": "MIT",

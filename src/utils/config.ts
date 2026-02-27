@@ -1,34 +1,36 @@
 import { writeFile } from 'node:fs/promises'
 import { homedir, platform } from 'node:os'
-import { pathToFileURL } from 'node:url'
+import { importJson } from './helpers.ts'
 import { cwd } from 'node:process'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { echo } from './tui.ts'
 import '@benzn/to-ms/extender'
 
+declare global {
+	const __rootdir: string
+	const __agentdir: string
+}
+
+// @ts-expect-error Property '__rootdir' does not exist on type 'typeof globalThis'.
+global.__rootdir = resolve(import.meta?.dirname ?? __dirname,'../..')
+// @ts-expect-error Property '__agentdir' does not exist on type 'typeof globalThis'.
+global.__agentdir = resolve(__rootdir, 'agent-files')
+
 type Secrets = typeof import('./secrets_alt.json')
 
-const secretsPath = join(cwd(), '!secrets.json')
+const secretsPath = join(__agentdir, 'secrets.json')
 const secretsPathAlt = join(import.meta.dirname, 'secrets_alt.json')
 
-function loadSecrets() {
-
-	const imp = async (path: string) => (
-		await import(
-			pathToFileURL(path).href,
-			{ with: { type: 'json' } }
-		)
-  ).default as Secrets
-
+function loadSecrets(): Promise<Secrets> {
 	try {
-		return imp(secretsPath)
+		return importJson(secretsPath)
 	} catch {
 		echo.wrn(`
-			Secrets are not setup at: "${secretsPath}"
-      Loading default template: "${secretsPathAlt}"
+			\rSecrets are not setup at: "${secretsPath}"
+      \rLoading default template: "${secretsPathAlt}"
     `.replaceAll('\\', '/'))
 
-		return imp(secretsPathAlt)
+		return importJson(secretsPathAlt)
 	}
 }
 
@@ -70,7 +72,7 @@ const providers = {
 			sendBtn: '#composer-submit-button',
 			stopBtn: '#composer-submit-button[disabled]',
 			response: '[data-message-author-role="assistant"]',
-			responseBlock: 'code',
+			responseBlock: '#code-block-viewer',
 		}
 	},
 	google: {
@@ -102,13 +104,6 @@ const env = {
 	...secrets
 } as const satisfies Config['env']
 
-const ask_instructions = () => `
-  [INSTRUCTIONS]
-    you are ${env.agent_name}, you are been used as an AI Agent made by ${env.owner_name}
-      - do not use imgs in the responses unless asked to
-      - do not use markdown only plain text unless asked to
-`
-
 const saveSecrets = (obj: Partial<Secrets> & Record<string, any>) => writeFile(
 	secretsPath,
 	JSON.stringify(
@@ -121,7 +116,6 @@ const saveSecrets = (obj: Partial<Secrets> & Record<string, any>) => writeFile(
 ).catch(echo.err)
 
 export {
-	ask_instructions,
 	saveSecrets,
 	providers,
 	env,

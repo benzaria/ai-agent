@@ -1,4 +1,4 @@
-import { reply, type PActions } from './consts.ts'
+import { autoReply, type PActions } from './consts.ts'
 import { echo } from '../../utils/tui.ts'
 
 const math_actions = {
@@ -10,7 +10,7 @@ const math_actions = {
 		const msg = `${expression} = *${result}*`
 
 		echo.cst.ln([32, action], msg)
-		reply(this, msg)
+		autoReply(this, msg)
 	},
 
 } as const satisfies PActions

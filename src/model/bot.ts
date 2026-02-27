@@ -1,10 +1,10 @@
-import '../cli/arguments.ts'
+import '../cli/args.ts'
 import puppeteer from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { instructions, type Instructions, type InstructionsType } from '../agent/instructions.ts'
 import { providers, env, saveSecrets } from '../utils/config.ts'
-import { template, delay } from '../utils/helpers.ts'
 import { Color, echo } from '../utils/tui.ts'
+import { delay } from '../utils/helpers.ts'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -19,10 +19,10 @@ global.shutdown = async () => {
 	process.exit()
 }
 
-async function initPage(headless: boolean | 'new' = 'new') {
+async function initEngine(headless: boolean | 'new') {
 	puppeteer.use(StealthPlugin())
 
-	echo.inf.lr('Initializing Puppeteer...' )
+	echo.inf.lr('Initializing Engine...' )
 	global.browser = await puppeteer.launch({
 		headless: headless as any,
 		userDataDir: env.user_data,
@@ -54,7 +54,7 @@ async function initPage(headless: boolean | 'new' = 'new') {
 		}
 	})
 
-	echo.scs('Puppeteer ready.')
+	echo.scs('Engine ready.')
 }
 
 async function initProvider(model: Models) {
@@ -109,7 +109,7 @@ async function initModel(instructions: Instructions | InstructionsType, persona?
 
 	const verbose = args.verbose
 	args.verbose = false
-	const res = await chat({ request: 'status', ...global.instructions })
+	const res = await ask({ request: 'status', ...global.instructions })
 	args.verbose = verbose
 
 	if (res?.includes('OK'))
@@ -130,48 +130,13 @@ async function initModel(instructions: Instructions | InstructionsType, persona?
 	saveSecrets({ conversation })
 }
 
-async function ask(q: Query) {
-	if (!global.page) return initPrblm('Page', 'err'), 'Could not get response.'
-	if (!global.provider) return initPrblm('Provider', 'err'), 'Could not get response.'
-
-	echo.inf(`\nquestion: ${q.question}${q.context ? '\ncontext: ' + q.context : '' }\n`)
-	const prompt = template(q)
-
-	await page.evaluate((text: string, selector: string) => {
-		const textarea = document.querySelector(selector) as HTMLTextAreaElement
-		if (textarea) {
-			textarea.innerHTML = text
-			textarea.dispatchEvent(new Event('input', { bubbles: true }))
-		}
-	}, prompt, providers[provider]['selector'].request)
-
-	await delay(200)
-	await page.click(providers[provider]['selector'].sendBtn)
-
-	echo.inf.lr('Waiting for AI response...')
-	await page.waitForSelector(providers[provider]['selector'].stopBtn, { visible: true, timeout: env.timeout })
-
-	const response = await page.evaluate((selector) => {
-		const messages = document.querySelectorAll(selector)
-		const lastMessage = messages[messages.length - 1] as HTMLElement
-		return lastMessage ? lastMessage.innerText.trim() : 'Could not find response.'
-	}, providers[provider]['selector'].response)
-
-	echo.vrb([Color.GREEN, 'response'],
-		'\n-------------------------\n' +
-    response +
-    '\n-------------------------\n'
-	)
-
-	return response
-}
-
-async function chat(p: object | string) {
-	if (!global.page) return initPrblm('Page', 'err')
+async function ask(p: object | string) {
+	if (!global.page) return initPrblm('Engine', 'err')
 	if (!global.provider) return initPrblm('Provider', 'err')
 	if (!global.instructions) initPrblm('Model', 'wrn')
 
 	const request = typeof p === 'string' ? { request: p } : p
+	const selector = providers[provider]['selector']
 	const prompt = JSON.stringify(request)
 
 	await page.evaluate((text: string, selector: string) => {
@@ -180,15 +145,20 @@ async function chat(p: object | string) {
 			textarea.innerHTML = text
 			textarea.dispatchEvent(new Event('input', { bubbles: true }))
 		}
-	}, prompt, providers[provider]['selector'].request)
+	}, prompt, selector.request)
 
 	echo.vrb([Color.BR_BLUE, 'request'], request)
 
 	await delay(200)
-	await page.click(providers[provider]['selector'].sendBtn)
+	await page.click(selector.sendBtn)
 
 	echo.inf.lr('Waiting for AI response...')
-	await page.waitForSelector(providers[provider]['selector'].stopBtn, { visible: true, timeout: env.timeout })
+	await page.waitForSelector(selector.stopBtn, { visible: true, timeout: env.timeout })
+	/* await page.waitForFunction(
+		(selector) => !document.querySelector(selector),
+		{ polling: 'raf', timeout: env.timeout },
+		selector.sendBtn
+	) */
 
 	const response = await page.evaluate((selector) => {
 		const messages = document.querySelectorAll(selector.response)
@@ -198,7 +168,7 @@ async function chat(p: object | string) {
 
 		const responseBlock = lastMessage.querySelector(selector.responseBlock) as HTMLElement
 		return (responseBlock ? responseBlock.innerText : lastMessage.innerText).trim()
-	}, providers[provider]['selector'])
+	}, selector)
 
 	echo.vrb([Color.GREEN, 'response'],
 		'\n-------------------------\n' +
@@ -209,13 +179,13 @@ async function chat(p: object | string) {
 	return response
 }
 
-const initPrblm = (step: 'Page' | 'Provider' | 'Model', level: 'err' | 'wrn') => (
+const initPrblm = (step: 'Engine' | 'Provider' | 'Model', level: 'err' | 'wrn') => (
 	echo[level](`${step} not initialized. Call \`init${step}\` first.`),
 	'Could not get response.'
 )
 
 async function initBot() {
-	await initPage(args.headless)
+	await initEngine(args.headless)
 	await initProvider(args.model)
 	await initModel(
 		instructions, (
@@ -232,16 +202,15 @@ async function initBot() {
 if (import.meta.main) {
 	(async () => {
 		await initBot()
-		await chat('write a poem about morocco')
+		await ask('write a poem about morocco')
 		shutdown()
 	})()
 }
 
 export {
-	initPage,
 	initProvider,
+	initEngine,
 	initModel,
 	initBot,
 	ask,
-	chat,
 }

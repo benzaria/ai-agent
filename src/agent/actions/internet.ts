@@ -1,4 +1,4 @@
-import { error, reply, type PActions } from './consts.ts'
+import { errors, autoReply, type PActions } from './consts.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { writeFile } from 'node:fs/promises'
 import { makeDir } from './file_system.ts'
@@ -9,7 +9,7 @@ const internet_actions = {
 		const { action, result } = this
 
 		echo.cst.ln([Color.GREEN, action], '\n' + result)
-		reply(this, `*[WEB SEARCH]*\n${result}`)
+		autoReply(this, `*[WEB SEARCH]*\n${result}`)
 	},
 
 	async fetch_api() {
@@ -39,11 +39,11 @@ const internet_actions = {
 
 			echo.scs.ln(`Status: ${res.status}\n${result}`)
 
-			reply(this, `*[FETCH API]* \`${res.status}\`\n${result}`)
+			autoReply(this, `*[FETCH API]* \`${res.status}\`\n${result}`)
 
 		}
 		catch (err: any) {
-			error(this, err)
+			errors(this, err)
 		}
 	},
 
@@ -69,11 +69,11 @@ const internet_actions = {
 
 			echo.scs.ln(`Saved → ${destination}`)
 
-			reply(this, `*[DOWNLOAD]*	\`${destination}\``)
+			autoReply(this, `*[DOWNLOAD]*	\`${destination}\``)
 
 		}
 		catch (err: any) {
-			error(this, err)
+			errors(this, err)
 		}
 	},
 

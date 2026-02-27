@@ -1,4 +1,4 @@
-import { code, string, stringArr, type InstructionsType } from './consts.ts'
+import { code, op, string, stringArr, type InstructionsType } from './consts.ts'
 import { env } from '../../utils/config.ts'
 
 const main = {
@@ -85,6 +85,7 @@ const main = {
 	environment: {
 		host_os: env.os,
 		home_dir: env.home,
+		agent_dir: __agentdir,
 		working_dir: env.cwd,
 		got_mentioned_ids: [
 			// env.agent_lid,
@@ -122,6 +123,8 @@ const main = {
 				platform: code,
 				to: string,
 				message: string,
+				'file?': op(string),
+				'mimetype?': op(string),
 			},
 			platform_codes: [
 				'whatsapp',
@@ -135,7 +138,8 @@ const main = {
 				'Generate message text if user intent implies sending but text missing',
 				'Do not fabricate unknown recipients',
 				'Message can have platform specific formatting',
-				'When listing elements make each one in a line, prefix with `-`'
+				'When listing elements make each one in a line, prefix with `-`',
+				'Use {file} to refer a file path to send, {minetype} to refer the sent file type'
 			]
 		},
 		{
@@ -276,7 +280,7 @@ const main = {
 			},
 			rules: [
 				'Infer path if contextually obvious',
-				'Fallback path: ~/agent-files/'
+				'Fallback path: {agent_dir}'
 			]
 		},
 		{
@@ -289,7 +293,7 @@ const main = {
 			},
 			rules: [
 				'Generate filenames if missing, prefix with \'wr_\'',
-				'Fallback path: ~/agent-files/',
+				'Fallback path: {agent_dir}',
 				'No truncation'
 			]
 		},
@@ -327,7 +331,7 @@ const main = {
 				path: string
 			},
 			rules: [
-				'Generate filenames if missing, prefix with \'rm_\'',
+				'Generate filenames if missing',
 				'Infer path when safely deducible'
 			]
 		},
@@ -367,7 +371,7 @@ const main = {
 			},
 			rules: [
 				'Generate destination if missing, prefix with \'dn_\'',
-				'Fallback path: ~/agent-files/'
+				'Fallback path: {agent_dir}'
 			]
 		},
 		{
@@ -383,9 +387,9 @@ const main = {
 				'7z',
 				'zip',
 				'tar',
-				'tgz',
-				'tar.gz',
 				'gz',
+				'tar.gz',
+				'tgz',
 			],
 			rules: [
 				'Generate destination if missing, prefix with \'cx_\'',

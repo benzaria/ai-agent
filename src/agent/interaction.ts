@@ -27,8 +27,8 @@ async function parser(data: MsgData & { response: string }) {
 		if (err.message.includes('is not valid JSON')) {
 			runAction({
 				...data,
-				action: 'web_search',
-				result: response,
+				action: 'talk',
+				text: response,
 			})
 		}
 		else {
@@ -42,11 +42,11 @@ async function runAction(
 	output?: AnyArray,
 	index?: number
 ): Promise<void> {
-	const { action, uJid } = data
+	const { action, uid } = data
 
 	if (
 		!env.safe_actions.includes(action) &&
-    !env.auth_users.includes(uJid)
+    !env.auth_users.includes(uid)
 	) return runAction({
 		...data,
 		action: 'error',
@@ -56,10 +56,10 @@ async function runAction(
 		missing_fields: [],
 	})
 
-	const fn = actions[action] as SyncFn<any[], any>
+	const fn = actions[action] as SyncFn
 
 	return fn
-		? fn.apply({ ...data, output })
+		? void fn.apply({ ...data, output })
 		: runAction({
 			...data,
 			action: 'error',

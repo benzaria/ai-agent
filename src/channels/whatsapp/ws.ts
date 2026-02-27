@@ -1,44 +1,44 @@
 import {
 	createWASocket,
+	connection,
 	type CreateSocketOpts,
-	type WS,
 } from './wa-socket.ts'
 
 import {
 	jidNormalizedUser,
-	isJidBroadcast,
-	isJidGroup,
 	isLidUser,
 	isPnUser,
 	type WAMessage,
 } from 'baileys'
 
-import { reply as auto_reply } from '../../agent/actions/consts.ts'
 import { queue, delay } from '../../utils/helpers.ts'
 import { parser } from '../../agent/interaction.ts'
+import { autoReply } from '../../agent/actions.ts'
 import { Color, echo } from '../../utils/tui.ts'
-import { env } from '../../utils/config.ts'
-import { chat } from '../../model/bot.ts'
-import { inspect } from 'node:util'
+import { ask } from '../../model/bot.ts'
+import {} from './wa-listeners.ts'
 
 type MsgData = Prettify<
 	& HandlerData
 	& {
-		gJid?: string
+		uid: string
+		gid?: string
+		request: string
+		mentions?: string[]
+		quoted?: {
+			from?: string
+			text?: string
+		}
 	}
 >
 
-type HandlerData = {
+type HandlerData = Prettify<{
+	jid: string
 	msg: WAMessage
-	uJid: string
-	request: string
-	mentions?: string[]
-}
+	m: NonNullable<WAMessage['message']>
+}>
 
-async function initWASocket(
-	opts?: CreateSocketOpts | null,
-	callback?: SyncFn<[ws?: WS]>
-) {
+async function initWASocket(opts?: CreateSocketOpts) {
 	global.ws = await createWASocket(opts ?? {
 		logger: 'none',
 		printQr: true,
@@ -48,120 +48,41 @@ async function initWASocket(
 		}
 	}, initWASocket)
 
-	await connection()
-		.then(callback ?? initListeners)
-		.catch(echo.err)
-
 	return global.ws
 }
 
-const connection = () => new Promise((res: (value: WS) => void) => {
-	ws.ev.on('connection.update', function ({ connection }) {
-		if (connection === 'open') res(global.ws)
-	})
-})
-
-function initListeners(ws: WS = global.ws) {
-
-	ws.ev.on('messages.upsert', async ({ messages, type }) => {
-		if (type !== 'notify') return
-
-		for (const msg of messages) {
-			// ignore bot messages and broadcasts
-			if (msg.key.fromMe || isJidBroadcast(msg.key.remoteJid!)) continue
-
-			const { message, key } = msg
-
-			// Get message uJid
-			const uJid = jidNormalizedUser(key.remoteJidAlt || key.remoteJid!)
-			const request =  message?.conversation || message?.extendedTextMessage?.text || ''
-			const mentions = message?.extendedTextMessage?.contextInfo?.mentionedJid || undefined
-
-			const isp = args.verbose && inspect(msg,
-				{
-					depth: null,
-					colors: true
-				}
-			)
-
-			const data = {
-				msg,
-				uJid,
-				request,
-				mentions
-			}
-
-			if (isJidUser(uJid)) {
-				echo.vrb([Color.BG_GREEN, 'user'], isp)
-				userHandler.apply(data)
-			}
-			else if (isJidGroup(uJid)) {
-				echo.vrb([Color.BG_GREEN, 'group'], isp)
-				groupHandler.apply(data)
-			}
-
-		}
-	})
-
-	//? ws.ev.on('')
-
-}
-
-async function userHandler(this: HandlerData) {
-	// const { msg: { message } } = this
-
-	await reply(this)
-}
-
-async function groupHandler(this: HandlerData) {
-	const { uJid, msg: { key }, request, mentions } = this
-	const lRequest = request.toLowerCase()
-
-	if (!(
-		mentions?.includes(env.agent_lid) ||
-		lRequest.includes('@' + env.agent_name.toLowerCase()) ||
-		lRequest.includes('@' + getID(env.agent_lid)) ||
-		lRequest.includes('@' + getID(env.agent_jid))
-	)) return
-
-	const participant = jidNormalizedUser(key?.participant || key?.participantAlt)
-
-	const data = {
-		...this,
-		gJid: uJid,
-		uJid: participant,
-	}
-
-	await reply(data)
-}
-
 const reply = queue(
-	async function (data: MsgData) {
-		const { uJid, gJid, msg: { key, message }, request, mentions } = data
-		const quoted = message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation || undefined
+	async function (_this: MsgData) {
+		const { uid, gid, msg: { key }, request, mentions, quoted } = _this
 
 		// Mark as Read
 		ws.readMessages([key!])
 
 		// Handle ping/pong
 		if (request.toLowerCase() === 'ping') {
-			auto_reply({ uJid }, 'pong 🏓')
+			autoReply(_this, 'pong 🏓')
 			return
 		}
-
+		// echo.isp({
+		// 	request,
+		// 	chat: gid,
+		// 	from: uid,
+		// 	mentions,
+		// 	quoted,
+		// })
 		// Mark as Typing
-		const typing = startTyping(uJid)
+		const typing = startTyping(gid ?? uid)
 
-		// Handle chat and parser
-		const response = await chat({
+		// Handle ask and parser
+		const response = await ask({
 			request,
-			chat: gJid,
-			from: uJid,
+			chat: gid,
+			from: uid,
 			mentions,
 			quoted,
 		})
 
-		parser({ ...data, response })
+		parser({ ..._this, response })
 			.finally(typing.stop)
 	}
 )
@@ -191,17 +112,24 @@ function startTyping(jid: string, interval = '.5'.s, timeout = '5'.s) {
 	return { stop }
 }
 
-const isJidUser = (jid?: string) => isLidUser(jid) || isPnUser(jid)
-const getID = (jid: string) => +jidNormalizedUser(jid).split('@')[0]
+function isJidUser(jid?: string) { return isLidUser(jid) || isPnUser(jid) }
+function getID (jid: string) { return +jidNormalizedUser(jid).split('@')[0] }
+function getJid({ key }: WAMessage) { return jidNormalizedUser(key.remoteJidAlt || key.remoteJid!) }
+function getUid({ key }: WAMessage) { return jidNormalizedUser(key?.participant || key?.participantAlt) }
 
 export {
-	initListeners,
 	initWASocket,
+	startTyping,
 	connection,
+	isJidUser,
+	getUid,
+	getJid,
 	getID,
+	reply,
 }
 
 export type {
+	HandlerData,
 	MsgData
 }
 

@@ -1,6 +1,5 @@
-import { initPage, initModel, chat, initProvider } from './bot.ts'
-import { main } from '../agent/instructions.ts'
-import { echo } from '../utils/tui.ts'
+import { Color, echo } from '../utils/tui.ts'
+import { initBot, ask } from './bot.ts'
 
 // @ts-expect-error Could not find a declaration file for module 'body-parser'.
 import bodyParser from 'body-parser'
@@ -13,25 +12,26 @@ const PORT = args.port
 app.use(bodyParser.json())
 
 app.post('/chat', async (req, res) => {
-
-	const prompt = req.body as {request: string}[]
-	echo.vrb([94, 'REQUEST'], prompt)
+	const prompt = req.body as { request: string }
+	echo.vrb([Color.BR_GREEN, 'request'], prompt)
 
 	try {
-		const resBody = await chat(prompt)
+		const resBody = await ask(prompt)
 		res.json(resBody)
 
 	} catch (error) {
 		echo.err('API Error:', error)
-		res.status(500).json({ error: { message: 'Internal Server Error' } })
+		res.status(500).json(
+			{
+				error: { message: 'Internal Server Error' }
+			}
+		)
 	}
 })
 
-async function startAPI() {
+async function initAPI() {
 	try {
-		await initPage(args.headless)
-		await initProvider('openai/gpt-5-mini')
-		await initModel(main)
+		await initBot()
 
 		app.listen(PORT, () => {
 			echo(`✅ OpenAI-compatible API running at http://localhost:${PORT}`)
@@ -42,8 +42,8 @@ async function startAPI() {
 	}
 }
 
-if (import.meta.main) startAPI()
+if (import.meta.main) initAPI()
 
 export {
-	startAPI
+	initAPI
 }

@@ -1,5 +1,6 @@
 import { voidFn } from './helpers.ts'
 import { stdout } from 'node:process'
+import { inspect,type InspectOptions } from 'node:util'
 
 // Enum exports
 export type Ansi = ValueOf<typeof Ansi>
@@ -112,14 +113,15 @@ type EchoTuple =
 	| EchoTupleType
 	| EchoMap[EchoLevel]
 
-type EchoFn = (...args: AnyArray) => () => void
-
-type EchoFnc =
-	(level: EchoLevel | EchoTuple, ...args: AnyArray) => () => void
-
+type EchoFn = (...args: AnyArray) => void
+type EchoFnc = (level: EchoLevel | EchoTuple, ...args: AnyArray) => void
+type EchoIsp = {
+	(obj: object, opt?: InspectOptions): void
+	val: (obj: object, opt?: InspectOptions) => string
+}
 type EchoErr = {
-	(...args: AnyArray): () => void
-	(err: Error, showFullError?: boolean): () => void
+	(err: Error): void
+	(...args: AnyArray): void
 }
 
 type WithMap = typeof withMap
@@ -131,26 +133,20 @@ type WithLine<T> = T & {
 
 type Echo =
 	& WithLine<EchoFn>
-	& {
-		err: WithLine<EchoErr>
-	}
-	& {
-		[K in Exclude<EchoLevel, 'err'>]:
-		WithLine<EchoFn>
-	}
-	& {
-		[K in EchoLvlc]:
-		WithLine<EchoFnc>
-	}
+	& { err: WithLine<EchoErr> }
+	& { isp: WithLine<EchoIsp> }
+	& { [K in EchoLvlc]: WithLine<EchoFnc> }
+	& { [K in Exclude<EchoLevel, 'err' | 'isp'>]: WithLine<EchoFn> }
 
 const echoCache = new Map<PropertyKey, any>()
 
 const echoMap = {
-	inf: [Color.BR_BLUE, 'INFO'],
-	wrn: [Color.BR_YELLOW, 'WARN'],
-	err: [Color.BR_RED, 'ERROR'],
-	scs: [Color.GREEN, 'SUCCESS'],
-	unk: [Color.MAGENTA, 'UNKNOWN'],
+	inf: [Color.BR_BLUE, 'info'],
+	wrn: [Color.BR_YELLOW, 'warn'],
+	err: [Color.BR_RED, 'error'],
+	scs: [Color.GREEN, 'success'],
+	isp: [Color.CYAN, 'inspect'],
+	unk: [Color.MAGENTA, 'unknown'],
 
 } as const satisfies Record<string, EchoTupleType>
 
@@ -172,10 +168,9 @@ const ignoreList = [
 stdout.write = (chunk: string | Buffer, encodingOrCallback?: any, callback?: () => void): boolean => {
 
 	const str = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk
-	const shouldIgnore = ignoreList.some((ignored) => str.includes(ignored))
+	const ignore = ignoreList.some(ignored => str.includes(ignored))
 
-	if (shouldIgnore) {
-
+	if (ignore) {
 		if (typeof encodingOrCallback === 'function')
 			encodingOrCallback()
 		else if (callback)
@@ -206,66 +201,76 @@ const withLine = <T extends AnyFunction>(fn: T) => {
 
 const echo = new Proxy(echoFn as Echo,
 	{
-		apply(_, __, args) {
-			_log(...args, `${Ansi.CSI}K`)
+		apply(_, __, _args) {
+			_log(..._args, `${Ansi.CSI}K`)
 		},
 
 		get(call, prop: string) {
 			if (echoCache.has(prop)) return echoCache.get(prop)
 
 			if (prop in withMap) {
-				const fn = (...args: AnyArray) =>
-					_log(...args, withMap[prop as WithProp] ?? '')
+				const fn = (..._args: AnyArray) =>
+					_log(..._args, withMap[prop as WithProp] ?? '')
 
 				return echoCache.set(prop, fn), fn
 			}
 
-			const fn = (...args: AnyArray) => call(echoLevel(prop), ...args)
+			const fn = (..._args: AnyArray) => call(echoLevel(prop), ..._args)
 
-			const fnc = (level: EchoLevel | EchoTuple, ...args: AnyArray) =>
-				call(typeof level === 'string' ? echoLevel(level) : level, ...args)
-
-			const fne = (...args: AnyArray) => {
-				if (
-					Error.isError(args[0]) && (
-						(args.length === 1) ||
-						(args.length === 2 && typeof args[1] === 'boolean')
-					)
-				) {
-					const [err, full] = args
-					return fn(full ? err : err.message)
-				}
-
-				return fn(...args)
+			const fnc = (..._args: AnyArray) => {
+				const level = _args.shift()
+				return call(
+					typeof level === 'string'
+						? echoLevel(level)
+						: level,
+					..._args
+				)
 			}
 
-			const fnv = (..._args: AnyArray) => (args.verbose ? fnc as any : voidFn)(..._args)
+			const fne = (..._args: AnyArray) => {
+				const err = _args[0]
+				if (
+					Error.isError(err) && _args.length === 1) {
+					return fn(args.verbose ? err : err.message)
+				}
+
+				return fn(..._args)
+			}
+
+			const fns = (obj: object,
+				opt: InspectOptions = {
+					depth: null,
+					colors: true
+				}
+			) => (args.verbose ? fn : voidFn)(inspect(obj, opt))
+
+			const fnv = (..._args: AnyArray) => (args.verbose ? fnc : voidFn)(..._args)
 			const fni = (..._args: AnyArray) => (args.verbose ? fn : voidFn)(..._args)
 
-			/* eslint-disable indent */
-			const out =
-				prop === 'err' ? fne :
-				prop === 'cst' ? fnc :
-				prop === 'vrb' ? fnv :
-				prop === 'inf' ? fni :
-				fn
-			/* eslint-enable indent */
+			const caller = withLine(
+				/* eslint-disable indent */
+					prop === 'err' ? fne :
+					prop === 'cst' ? fnc :
+					prop === 'vrb' ? fnv :
+					prop === 'inf' ? fni :
+					prop === 'isp' ? fns :
+					fn
+			) /* eslint-enable indent */
 
-			const wrapped = withLine(out)
-
-			// if (!'inf,vrb'.includes(prop))
-			echoCache.set(prop, wrapped)
-
-			return wrapped
+			return echoCache.set(prop, caller), caller
 		},
 	},
 )
 
+const __linker = (text: string, link: string) =>
+	`${Ansi.OSC}8;;${link}${Ansi.BEL}${text}${Ansi.OSC}8;;${Ansi.BEL}`
+
 export {
-	echo,
 	echoMap,
-	color,
 	color256,
+	__linker,
+	echo,
+	color,
 	Color,
 	Ansi,
 }

@@ -3,7 +3,7 @@ import { parser, runAction } from '../interaction.ts'
 import * as instructions from '../instructions.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { env } from '../../utils/config.ts'
-import { chat } from '../../model/bot.ts'
+import { ask } from '../../model/bot.ts'
 
 
 type ActionsObj = typeof instructions['main']['actions']
@@ -17,7 +17,13 @@ type ActionsMap = Prettify<{
 					]: ValueOf<A[`${K & string}_codes` & keyof A]>
         } & {
 					[K in keyof S as
-						IsNever<S[K]> extends true ? never : K
+						K extends `${infer T}?` ? T : never
+					]: S[K]
+				} & {
+					[K in keyof S as
+						IsNever<S[K]> extends true ? never
+							: K extends `${string}?` ? never
+								: K
 					]: S[K]
 				}
 			: never
@@ -46,55 +52,49 @@ type Actions = {
 
 type PActions = Partial<Actions>
 
-const reply = (
-	{ uJid, gJid }: { uJid: string, gJid?: string },
+const autoReply = (
+	{ uid, gid }: { uid: string, gid?: string },
 	text: string,
 	mentions: string[] = []
 ) => {
-	if (isCLI) return
+	if (global.isCLI) return
 
 	text = text.replaceAll(env.home, '~')
-	echo.vrb([Color.GREEN, 'reply'], { to: gJid ?? uJid, text })
+	echo.vrb([Color.GREEN, 'reply'], { to: gid ?? uid, text })
 
-	return ws.send(gJid ?? uJid, { text, mentions })
+	return ws.send(gid ?? uid, { text, mentions })
 }
 
-const error = (ctx: ActionsType, err: Error) => {
-	echo.err(err.message)
+const errors = (
+	ctx: ActionsType, err: Error,
+	err_code: ActionsMap['error']['error'] = 'EXECUTION_FAILED'
+) => {
+	echo.err.ln(err)
 
 	return runAction({
 		...ctx as any,
 		action: 'error',
-		error: 'EXECUTION_FAILED',
+		error: err_code,
 		details: err.message,
 	})
 }
 
-const results = async (data: {
-  result: unknown
-  request: string
-  response: string
-  action_was: Partial<ActionsType>
-}) => {
-	echo.scs.ln(data.result)
+const returns = async (ctx: ActionsType, result: unknown) => {
+	echo.scs.ln(result)
 
 	return parser({
-		...data as any,
-		response: await chat({
+		...ctx as any,
+		response: await ask({
 			action: 'result',
-			// context: {
-			// 	request_was: data.request,
-			// 	response_was: data.response,
-			// },
-			result: data.result
+			result,
 		})
 	})
 }
 
 export {
-	results,
-	reply,
-	error,
+	autoReply,
+	returns,
+	errors,
 }
 
 export type {

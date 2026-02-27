@@ -1,12 +1,12 @@
 import { createInterface } from 'node:readline/promises'
-import { initBot, chat } from '../model/bot.ts'
+import { initBot, ask } from '../model/bot.ts'
 import { stdin, stdout } from 'node:process'
 import { echo } from '../utils/tui.ts'
 
 const rl = createInterface({ input: stdin, output: stdout })
 
-async function collectPrompt(prompt: string): Promise<string> {
-	echo(`${prompt}`)
+async function collectPrompt(prompt?: string): Promise<string> {
+	prompt && echo(prompt)
 	let lines = []
 
 	while (true) {
@@ -18,7 +18,7 @@ async function collectPrompt(prompt: string): Promise<string> {
 	return lines.join('\n')
 }
 
-async function initCLI(callback?: (...args: any[]) => any) {
+async function initCLI(parser?: AnyFunction) {
 	echo.inf.ln('Bot Ready! Type your prompt below (or "exit" to quit):')
 	let request, response
 
@@ -29,12 +29,12 @@ async function initCLI(callback?: (...args: any[]) => any) {
 		if (!request) continue
 
 		try {
-			response = await chat({ request })
+			response = await ask({ request })
 		} catch (err) {
 			echo.err(err)
 		}
 
-		callback ? callback({ request, response }) : null
+		parser?.({ request, response })
 	}
 
 	rl.close()

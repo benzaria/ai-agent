@@ -1,9 +1,9 @@
-import './arguments.ts'
+import './args.ts'
 
 import { initWASocket } from '../channels/whatsapp/ws.ts'
 import { parser } from '../agent/interaction.ts'
 import { initBot } from '../model/bot.ts'
-import { initCLI } from './chat_tui.ts'
+import { initCLI } from './chat.ts'
 
 async function initAgent() {
 

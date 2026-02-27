@@ -2,8 +2,8 @@ import {
 	makeWASocket,
 	DisconnectReason,
 	useMultiFileAuthState,
+	fetchLatestBaileysVersion,
 	makeCacheableSignalKeyStore,
-	//- fetchLatestBaileysVersion,
 } from 'baileys'
 
 import {
@@ -16,6 +16,7 @@ import {
 import { delay, queue, lazy, voidFn } from '../../utils/helpers.ts'
 import { echo, Color } from '../../utils/tui.ts'
 import { env } from '../../utils/config.ts'
+import EventEmitter from 'node:events'
 import { join } from 'node:path'
 
 type CreateSocketOpts = {
@@ -24,6 +25,7 @@ type CreateSocketOpts = {
   onQr?: (qr: string) => void
   logger?: 'none' | 'silent' | 'info' | 'debug'
 }
+
 type WS = ReturnType<typeof makeWASocket> & { send: WS['sendMessage'] }
 type ReconnectFn = (opts: CreateSocketOpts) => Promise<WS>
 
@@ -50,7 +52,7 @@ async function backupCreds(authDir: string) {
 	} catch {}
 }
 
-async function restoreCredsIfCorrupted(authDir: string) {
+async function restoreCreds(authDir: string) {
 	const creds = join(authDir, 'creds.json')
 	const backup = join(authDir, 'creds.backup.json')
 
@@ -80,9 +82,9 @@ async function createWASocket(
 		}
 		: (await getPino())({ level: opts.logger ?? 'info' })
 
-	await restoreCredsIfCorrupted(authDir)
+	await restoreCreds(authDir)
 	const { state, saveCreds } = await useMultiFileAuthState(authDir)
-	//-   const { version } = await fetchLatestBaileysVersion()
+	const { version } = await fetchLatestBaileysVersion()
 
 	echo.inf.lr('Initializing WASocket...')
 	const sock = makeWASocket({
@@ -91,8 +93,19 @@ async function createWASocket(
 			creds: state.creds,
 			keys: makeCacheableSignalKeyStore(state.keys, logger)
 		},
-		//- version,
+		version,
 		browser: [env.agent_name, 'chrome', '1.0.0']
+	}) as WS
+
+	// Alias for `sendMessage`
+	;(sock as WS).send = function (...args: Parameters<WS['sendMessage']>) {
+		return sock.sendMessage(...args)
+			.finally(() => global.typing = 0)
+	}
+
+	// WS error safety
+	sock.ws.on('error', (err: Error) => {
+		echo.err('WASocket error:', err.message)
 	})
 
 	// Save creds safely
@@ -102,7 +115,7 @@ async function createWASocket(
 	})
 
 	// Connection updates
-	sock.ev.on('connection.update', async (update) => {
+	sock.ev.on('connection.update', async update => {
 		const { connection, lastDisconnect, qr } = update
 
 		// QR handling
@@ -118,14 +131,17 @@ async function createWASocket(
 		}
 
 		if (connection === 'open') {
+			connectEvent.emit('open', sock)
 			echo.scs('WASocket ready.')
 		}
 
 		if (connection === 'close') {
+			const error = lastDisconnect?.error ?? new Error('unknown')
 			const status = (lastDisconnect?.error as any)?.output?.statusCode
 			const shouldReconnect = status !== DisconnectReason.loggedOut
 
-			echo.err('Connection closed:', status)
+			connectEvent.emit('close', error)
+			echo.err('Connection closed:', status, error)
 
 			if (shouldReconnect) {
 				echo.inf.lr('Reconnecting...')
@@ -145,26 +161,44 @@ async function createWASocket(
 		}
 	})
 
-	// WS error safety
-	sock.ws.on('error', (err: Error) => {
-		echo.err('WASocket error:', err.message)
-	})
+	return sock
+}
 
-	;(sock as WS).send = function (...args: Parameters<WS['sendMessage']>) {
-		return sock.sendMessage(...args)
-			.finally(() => global.typing = 0)
+const connectEvent = new EventEmitter<{
+	'open': [ws: WS],
+	'close': [err: Error]
+}>({
+	captureRejections: true
+})
+
+function conectionHandler() {
+	const connectMap = new Set<SyncFn<[], void, WS>>()
+
+	function connection(listener: SyncFn<[], void, WS>) {
+		connectMap.add(listener)
 	}
 
-	return sock as WS
+	connection.run = function (ws: WS) {
+		connectMap.forEach(listener => listener.apply(ws))
+	}
+
+	connectEvent.on('open', connection.run)
+	// connectEvent.on('close', voidFn)
+
+	return connection
 }
+
+const connection = conectionHandler()
 
 export {
 	createWASocket,
-	restoreCredsIfCorrupted,
+	restoreCreds,
 	backupCreds,
 	qsaveCreds,
+	connection,
 }
 
 export type {
-	WS, CreateSocketOpts,
+	WS,
+	CreateSocketOpts,
 }

@@ -10,9 +10,10 @@ import {
 	cp,
 	rm,
 } from 'node:fs/promises'
-import { error, reply, results, type PActions } from './consts.ts'
-import { spawn } from 'node:child_process'
+
+import { errors, autoReply, returns, type PActions } from './consts.ts'
 import { Color, echo } from '../../utils/tui.ts'
+import { spawn } from 'node:child_process'
 import { dirname } from 'node:path'
 
 const makeDir = (path: string) => mkdir(dirname(path), { recursive: true })
@@ -47,11 +48,10 @@ const file_system_actions = {
 
 	async exists() {
 		const { action, path, keywords = [] } = this
-
-		echo.cst([Color.BLUE, action], { path, keywords })
-
 		const lKeywords: string[] = keywords
 			.map((key: string) => key.toLowerCase())
+
+		echo.cst([Color.BLUE, action], { path, keywords })
 
 		await readdir(path)
 			.then(async files => {
@@ -65,19 +65,9 @@ const file_system_actions = {
 					).length,
 				)
 
-				results(
-					{
-						...this,
-						result,
-						action_was: {
-							action,
-							path,
-							keywords,
-						},
-					},
-				)
+				returns(this, result)
 			})
-			.catch((err: Error) => error(this, err))
+			.catch(err => errors(this, err))
 	},
 
 	async make_dir() {
@@ -86,20 +76,20 @@ const file_system_actions = {
 		echo.cst([Color.BLUE, action], path)
 
 		await mkdir(path, { recursive: true })
-			.then(() => reply(this, `*[MKDIR]* \`${path}\``))
-			.catch((err: Error) => error(this, err))
+			.then(() => autoReply(this, `*[MKDIR]* \`${path}\``))
+			.catch(err => errors(this, err))
 	},
 
 	async write() {
 		const { action, path, content } = this
 
 		echo.cst([Color.GREEN, action], path)
-		reply(this, content)
+		autoReply(this, content)
 
 		await makeDir(path)
 		await writeFile(path, content, 'utf-8')
-			.then(() => reply(this, `*[WRITE]* \`${path}\``))
-			.catch((err: Error) => error(this, err))
+			.then(() => autoReply(this, `*[WRITE]* \`${path}\``))
+			.catch(err => errors(this, err))
 	},
 
 	async read() {
@@ -112,20 +102,14 @@ const file_system_actions = {
 				let result: string | string[]
 
 				if (info.isDirectory())
-					result = await readdir(path, 'utf-8')
+					result = (await readdir(path, { withFileTypes: true }))
+						.map(file => file.name + (file.isDirectory() ?  '/' : ''))
 				else
 					result = await readFile(path, 'utf-8')
 
-				results({
-					...this,
-					result,
-					action_was: {
-						action,
-						path,
-					},
-				})
+				returns(this, result)
 			})
-			.catch((err: Error) => error(this, err))
+			.catch(err => errors(this, err))
 	},
 
 	async delete() {
@@ -140,9 +124,9 @@ const file_system_actions = {
 				else
 					await unlink(path)
 
-				reply(this, `*[DELETE]* \`${path}\``)
+				autoReply(this, `*[DELETE]* \`${path}\``)
 			})
-			.catch((err: Error) => error(this, err))
+			.catch(err => errors(this, err))
 	},
 
 	async copy() {
@@ -158,9 +142,9 @@ const file_system_actions = {
 				else
 					await copyFile(from, to)
 
-				reply(this, `*[COPY]* \`${from}\` → \`${to}\``)
+				autoReply(this, `*[COPY]* \`${from}\` → \`${to}\``)
 			})
-			.catch((err: Error) => error(this, err))
+			.catch(err => errors(this, err))
 	},
 
 	async move() {
@@ -168,9 +152,10 @@ const file_system_actions = {
 
 		echo.cst([Color.YELLOW, action], `${from} → ${to}`)
 
+		await makeDir(to)
 		await rename(from, to)
-			.then(() => reply(this, `*[MOVE]* \`${from}\` → \`${to}\``))
-			.catch((err: Error) => error(this, err))
+			.then(() => autoReply(this, `*[MOVE]* \`${from}\` → \`${to}\``))
+			.catch(err => errors(this, err))
 	},
 
 	async compress() {
@@ -225,11 +210,11 @@ const file_system_actions = {
 			}
 
 			echo.scs.ln(`Archive created → ${destination}`)
-			reply(this, `*[COMPRESS]* \`${path}\` → \`${destination}\``)
+			autoReply(this, `*[COMPRESS]* \`${path}\` → \`${destination}\``)
 
 		}
 		catch (err: any) {
-			error(this, err)
+			errors(this, err)
 		}
 	},
 
@@ -243,11 +228,11 @@ const file_system_actions = {
 			await run7z('x', path, `-o${destination}`, '-y')
 
 			echo.scs.ln(`Extracted → ${destination}`)
-			reply(this, `*[DECOMPRESS]* \`${path}\` → \`${destination}\``)
+			autoReply(this, `*[DECOMPRESS]* \`${path}\` → \`${destination}\``)
 
 		}
 		catch (err: any) {
-			error(this, err)
+			errors(this, err)
 		}
 	},
 
@@ -260,18 +245,10 @@ const file_system_actions = {
 			const { stdout } = await run7z('l', path)
 			const result = stdout.trim()
 
-			results({
-				...this,
-				result,
-				action_was: {
-					action,
-					path
-				}
-			})
-
+			returns(this, result)
 		}
 		catch (err: any) {
-			error(this, err)
+			errors(this, err)
 		}
 	},
 
