@@ -9,33 +9,41 @@ import {
 	isLidUser,
 	isPnUser,
 	type WAMessage,
+	type proto,
 } from 'baileys'
 
+//! Do not change imports to 'action.ts'
+import { parser, runAction } from '../../agent/interaction.ts'
+import { autoReply } from '../../agent/actions/consts.ts'
 import { queue, delay } from '../../utils/helpers.ts'
-import { parser } from '../../agent/interaction.ts'
-import { autoReply } from '../../agent/actions.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { ask } from '../../model/bot.ts'
-import {} from './wa-listeners.ts'
+import './wa-listeners.ts'
 
 type MsgData = Prettify<
 	& HandlerData
 	& {
 		uid: string
 		gid?: string
+	}
+	& {
+		type?: string
+		media?: string
 		request: string
 		mentions?: string[]
 		quoted?: {
 			from?: string
 			text?: string
+			media?: string
 		}
 	}
 >
 
 type HandlerData = Prettify<{
+	/** `gid ?? uid` */
 	jid: string
 	msg: WAMessage
-	m: NonNullable<WAMessage['message']>
+	m: proto.IMessage
 }>
 
 async function initWASocket(opts?: CreateSocketOpts) {
@@ -51,35 +59,63 @@ async function initWASocket(opts?: CreateSocketOpts) {
 	return global.ws
 }
 
+function slashCommand(_this: MsgData, request: string) {
+	if (!request.startsWith('/')) return false
+	request = request
+		.toLowerCase()
+		.slice(1)
+
+	switch (request) {
+		case 'ping':
+			autoReply(_this, 'pong 🏓')
+			break
+
+		case 'shutdown':
+		case 'restart':
+		case 'reload':
+			runAction({
+				..._this as any,
+				action: `sys.${request}`,
+				reason: 'Exec slash command'
+			})
+			break
+
+		default:
+			return false
+	}
+
+	return true
+}
+
 const reply = queue(
 	async function (_this: MsgData) {
-		const { uid, gid, msg: { key }, request, mentions, quoted } = _this
+		const {
+			jid, uid, gid,
+			msg: { key },
+			mentions,
+			request,
+			quoted,
+			media,
+		} = _this
 
 		// Mark as Read
 		ws.readMessages([key!])
+		echo.isp(_this)
 
-		// Handle ping/pong
-		if (request.toLowerCase() === 'ping') {
-			autoReply(_this, 'pong 🏓')
-			return
-		}
-		// echo.isp({
-		// 	request,
-		// 	chat: gid,
-		// 	from: uid,
-		// 	mentions,
-		// 	quoted,
-		// })
+		// Handle Slash Commands
+		if (slashCommand(_this, request)) return
+
 		// Mark as Typing
-		const typing = startTyping(gid ?? uid)
+		const typing = startTyping(jid)
 
-		// Handle ask and parser
+		// Handle Ask and Parser
 		const response = await ask({
 			request,
 			chat: gid,
 			from: uid,
 			mentions,
 			quoted,
+			media,
 		})
 
 		parser({ ..._this, response })
@@ -113,18 +149,17 @@ function startTyping(jid: string, interval = '.5'.s, timeout = '5'.s) {
 }
 
 function isJidUser(jid?: string) { return isLidUser(jid) || isPnUser(jid) }
-function getID (jid: string) { return +jidNormalizedUser(jid).split('@')[0] }
+function getId (jid: string) { return +jidNormalizedUser(jid).split('@')[0] }
 function getJid({ key }: WAMessage) { return jidNormalizedUser(key.remoteJidAlt || key.remoteJid!) }
 function getUid({ key }: WAMessage) { return jidNormalizedUser(key?.participant || key?.participantAlt) }
 
 export {
 	initWASocket,
 	startTyping,
-	connection,
 	isJidUser,
 	getUid,
 	getJid,
-	getID,
+	getId,
 	reply,
 }
 

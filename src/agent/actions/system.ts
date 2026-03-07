@@ -1,16 +1,11 @@
-import { errors, autoReply, returns, type PActions } from './consts.ts'
+import { autoReply,  errors,type PActions } from './consts.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { spawn } from 'node:child_process'
-
-const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as {
-	new (...args: string[]): AsyncFn<any[], any>
-    (...args: string[]): AsyncFn<any[], any>
-    readonly prototype: AsyncFn<any[], any>
-}
+import { delay } from '../../utils/helpers.ts'
 
 const system_actions = {
 
-	none() { echo.vrb.ln([Color.BR_BLACK, 'none']) },
+	none() { echo.vrb.ln([Color.BR_BLACK, this.action]) },
 
 	talk() {
 		const { action, text } = this
@@ -19,18 +14,28 @@ const system_actions = {
 		autoReply(this, text)
 	},
 
-	async shutdown() {
+	'sys.reload'() {
+		const { action, reason } = this
+
+		echo.cst.ln([Color.YELLOW, action], reason)
+		autoReply(this, `*[SYSTEM]* \`Reload\`\n${reason}`)
+		global.isReloading = true
+		global.actions?.reload
+		// delay('.5'.m, () => globa.isReloading = false)
+	},
+
+	'sys.shutdown'() {
 		const { action , reason } = this
 
 		echo.cst([Color.RED, action], reason)
-		await autoReply(this, `*[SYSTEM]* \`Shutdown\`\n${reason}`)
-		shutdown()
+		autoReply(this, `*[SYSTEM]* \`Shutdown\`\n${reason}`)
+			?.finally(shutdown)
 	},
 
-	restart() {
+	'sys.restart'() {
 		const { action, reason } = this
 
-		echo.cst.ln([33, action], reason)
+		echo.cst.ln([Color.YELLOW, action], reason)
 
 		try {
 			const cmd = process.argv.join(' ')
@@ -45,9 +50,9 @@ const system_actions = {
 
 			// child.unref()
 
-			child.on('spawn', async () => {
-				await autoReply(this, '*[SYSTEM]* `Restart`')
-				shutdown()
+			child.on('spawn', () => {
+				autoReply(this, '*[SYSTEM]* `Restart`')
+					?.finally(shutdown)
 			})
 
 		}
@@ -85,17 +90,6 @@ const system_actions = {
 		echo.cst.ln([Color.GREEN, action], msg)
 		autoReply(this, msg)
 	},
-
-	async execute() {
-		const { action, command } = this
-
-		echo.cst.ln([Color.GREEN, action], command)
-		await new AsyncFunction(command)()
-			.then(result => returns(this, result))
-			.catch(err => errors(this, err))
-	},
-
-	auth_user() {},
 
 } as const satisfies PActions
 

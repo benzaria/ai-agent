@@ -1,40 +1,43 @@
+import { hotImport, queue } from './helpers.ts'
 import { writeFile } from 'node:fs/promises'
 import { homedir, platform } from 'node:os'
-import { importJson } from './helpers.ts'
 import { cwd } from 'node:process'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { echo } from './tui.ts'
-import '@benzn/to-ms/extender'
 
-declare global {
-	const __rootdir: string
-	const __agentdir: string
-}
+const secretsPathAlt = join(import.meta.dirname, '/secrets_alt.json')
+const secretsPath = join(__agentdir, '/secrets.json')
+const secrets = await loadSecrets(global.isReloading)
 
-// @ts-expect-error Property '__rootdir' does not exist on type 'typeof globalThis'.
-global.__rootdir = resolve(import.meta?.dirname ?? __dirname,'../..')
-// @ts-expect-error Property '__agentdir' does not exist on type 'typeof globalThis'.
-global.__agentdir = resolve(__rootdir, 'agent-files')
-
-type Secrets = typeof import('./secrets_alt.json')
-
-const secretsPath = join(__agentdir, 'secrets.json')
-const secretsPathAlt = join(import.meta.dirname, 'secrets_alt.json')
-
-function loadSecrets(): Promise<Secrets> {
+function loadSecrets(_force: boolean = false): Promise<Secrets> {
 	try {
-		return importJson(secretsPath)
+		return hotImport(secretsPath)
 	} catch {
 		echo.wrn(`
 			\rSecrets are not setup at: "${secretsPath}"
       \rLoading default template: "${secretsPathAlt}"
     `.replaceAll('\\', '/'))
 
-		return importJson(secretsPathAlt)
+		return hotImport(secretsPathAlt)
 	}
 }
 
-const secrets = await loadSecrets()
+const saveSecrets = queue(
+	async function (obj: Partial<Secrets> & Record<string, any>) {
+		await writeFile(
+			secretsPath,
+			JSON.stringify(
+				Object.assign(
+					secrets,
+					obj
+				),
+				null, 2
+			)
+		).catch(echo.err)
+
+		return secrets
+	}
+)
 
 type Config = {
   providers: {
@@ -56,7 +59,6 @@ type Config = {
     userAgent: string
   } & Secrets
 
-  ask_instructions: () => string
 }
 
 const providers = {
@@ -104,18 +106,8 @@ const env = {
 	...secrets
 } as const satisfies Config['env']
 
-const saveSecrets = (obj: Partial<Secrets> & Record<string, any>) => writeFile(
-	secretsPath,
-	JSON.stringify(
-		Object.assign(
-			secrets,
-			obj
-		),
-		null, 2
-	)
-).catch(echo.err)
-
 export {
+	loadSecrets,
 	saveSecrets,
 	providers,
 	env,

@@ -1,6 +1,8 @@
+import './args.ts'
 import { createInterface } from 'node:readline/promises'
 import { initBot, ask } from '../model/bot.ts'
 import { stdin, stdout } from 'node:process'
+import { env } from '../utils/config.ts'
 import { echo } from '../utils/tui.ts'
 
 const rl = createInterface({ input: stdin, output: stdout })
@@ -29,7 +31,10 @@ async function initCLI(parser?: AnyFunction) {
 		if (!request) continue
 
 		try {
-			response = await ask({ request })
+			response = await ask({
+				admin_key: env.admin_key,
+				request
+			})
 		} catch (err) {
 			echo.err(err)
 		}
@@ -44,7 +49,6 @@ if (import.meta.main) {
 	(async () => {
 		await initBot()
 		await initCLI()
-		shutdown()
 	})()
 }
 

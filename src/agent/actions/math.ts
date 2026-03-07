@@ -1,5 +1,5 @@
 import { autoReply, type PActions } from './consts.ts'
-import { echo } from '../../utils/tui.ts'
+import { Color, echo } from '../../utils/tui.ts'
 
 const math_actions = {
 
@@ -9,7 +9,7 @@ const math_actions = {
 		const result = new Function(`return (${expression})`)()
 		const msg = `${expression} = *${result}*`
 
-		echo.cst.ln([32, action], msg)
+		echo.cst.ln([Color.GREEN, action], msg)
 		autoReply(this, msg)
 	},
 

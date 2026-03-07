@@ -1,3 +1,4 @@
+import '../cli/args.ts'
 import { Color, echo } from '../utils/tui.ts'
 import { initBot, ask } from './bot.ts'
 

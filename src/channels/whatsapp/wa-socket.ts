@@ -16,7 +16,7 @@ import {
 import { delay, queue, lazy, voidFn } from '../../utils/helpers.ts'
 import { echo, Color } from '../../utils/tui.ts'
 import { env } from '../../utils/config.ts'
-import EventEmitter from 'node:events'
+import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 
 type CreateSocketOpts = {
@@ -172,18 +172,18 @@ const connectEvent = new EventEmitter<{
 })
 
 function conectionHandler() {
-	const connectMap = new Set<SyncFn<[], void, WS>>()
+	const listeners: SyncFn<[], void, WS>[] = []
 
-	function connection(listener: SyncFn<[], void, WS>) {
-		connectMap.add(listener)
+	function connection(listener: ValueOf<typeof listeners>) {
+		listeners.push(listener)
 	}
 
 	connection.run = function (ws: WS) {
-		connectMap.forEach(listener => listener.apply(ws))
+		listeners.forEach(listener => listener.apply(ws))
 	}
 
 	connectEvent.on('open', connection.run)
-	// connectEvent.on('close', voidFn)
+	connectEvent.on('close', voidFn)
 
 	return connection
 }

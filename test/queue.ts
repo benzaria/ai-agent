@@ -8,18 +8,12 @@ const fn1 = queue(
 	}
 )
 
-const fn2 = queue(
-	function (this: any, time: number) {
-		return delay(time).then(() => echo(this))
-	}
-)
-
 fn1.call('test1', '2'.s)
 fn1.call('test2', '1'.s)
 
-echo(fn1.pending, fn1.pendingCount)
-delay('2.5'.s, () => echo(fn1.pending, fn1.pendingCount))
+echo(fn1.pending, fn1.count)
+delay('2.5'.s, () => echo(fn1.pending, fn1.count))
 await fn1.idle()
-echo(fn1.pending, fn1.pendingCount)
+echo(fn1.pending, fn1.count)
 
 echo('test3')

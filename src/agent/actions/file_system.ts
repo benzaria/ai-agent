@@ -10,67 +10,52 @@ import {
 	cp,
 	rm,
 } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 
-import { errors, autoReply, returns, type PActions } from './consts.ts'
+import { autoReply, returns, errors, type PActions } from './consts.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { spawn } from 'node:child_process'
 import { dirname } from 'node:path'
 
-const makeDir = (path: string) => mkdir(dirname(path), { recursive: true })
-
-const run7z = (...args: string[]) => new Promise<{
-	stdout: string
-	stderr: string
-}>((res, rej) => {
-
-	const ps = spawn('7z', args, { stdio: 'pipe' })
-
-	let stdout = ''
-	let stderr = ''
-
-	ps.stdout.on('data', d => {
-		stdout += d.toString()
-	})
-
-	ps.stderr.on('data', d => {
-		stderr += d.toString()
-	})
-
-	ps.on('close', code => {
-		if (code === 0) res({ stdout, stderr })
-		else rej(new Error(stderr || `7z exited with ${code}`)
-		)
-	})
-
-})
-
 const file_system_actions = {
 
-	async exists() {
+	async 'fs.exists'() {
 		const { action, path, keywords = [] } = this
-		const lKeywords: string[] = keywords
-			.map((key: string) => key.toLowerCase())
-
 		echo.cst([Color.BLUE, action], { path, keywords })
 
-		await readdir(path)
+		const lKeywords: string[] = keywords
+			.map(key => key.toLowerCase())
+
+		await readdir(path, { withFileTypes: true })
 			.then(async files => {
-				const result = files.filter(
-					file => (
-						lKeywords.filter(
-							key => file
-								.toLowerCase()
-								.includes(key),
-						)
-					).length,
-				)
+				const result = files
+					.map(mapDir)
+					.filter(
+						file => (
+							lKeywords.filter(
+								key => file
+									.toLowerCase()
+									.includes(key)
+							)
+						).length,
+					)
 
 				returns(this, result)
 			})
 			.catch(err => errors(this, err))
 	},
 
-	async make_dir() {
+	async 'fs.list'() {
+		const { action, path } = this
+
+		echo.cst([Color.GREEN, action], path)
+
+		await readdir(path, { withFileTypes: true })
+			.then(res => returns(this, res.map(mapDir)))
+			.catch(err => errors(this, err))
+	},
+
+	async 'fs.mkdir'() {
 		const { action, path } = this
 
 		echo.cst([Color.BLUE, action], path)
@@ -80,8 +65,18 @@ const file_system_actions = {
 			.catch(err => errors(this, err))
 	},
 
-	async write() {
-		const { action, path, content } = this
+	async 'fs.read'() {
+		const { action, path } = this
+
+		echo.cst([Color.GREEN, action], path)
+
+		await readFile(path, 'utf-8')
+			.then(res => returns(this, res))
+			.catch(err => errors(this, err))
+	},
+
+	async 'fs.write'() {
+		const { action, path, content = '' } = this
 
 		echo.cst([Color.GREEN, action], path)
 		autoReply(this, content)
@@ -92,27 +87,7 @@ const file_system_actions = {
 			.catch(err => errors(this, err))
 	},
 
-	async read() {
-		const { action, path } = this
-
-		echo.cst([Color.GREEN, action], path)
-
-		await stat(path)
-			.then(async info => {
-				let result: string | string[]
-
-				if (info.isDirectory())
-					result = (await readdir(path, { withFileTypes: true }))
-						.map(file => file.name + (file.isDirectory() ?  '/' : ''))
-				else
-					result = await readFile(path, 'utf-8')
-
-				returns(this, result)
-			})
-			.catch(err => errors(this, err))
-	},
-
-	async delete() {
+	async 'fs.delete'() {
 		const { action, path } = this
 
 		echo.cst([Color.RED, action], path)
@@ -129,8 +104,8 @@ const file_system_actions = {
 			.catch(err => errors(this, err))
 	},
 
-	async copy() {
-		const { action, from, to } = this
+	async 'fs.copy'() {
+		const { action, path: from, destination: to = from } = this
 
 		echo.cst([Color.YELLOW, action], `${from} → ${to}`)
 
@@ -147,8 +122,8 @@ const file_system_actions = {
 			.catch(err => errors(this, err))
 	},
 
-	async move() {
-		const { action, from, to } = this
+	async 'fs.move'() {
+		const { action, path: from, destination: to = from } = this
 
 		echo.cst([Color.YELLOW, action], `${from} → ${to}`)
 
@@ -158,7 +133,7 @@ const file_system_actions = {
 			.catch(err => errors(this, err))
 	},
 
-	async compress() {
+	async 'archive.compress'() {
 		const {
 			action,
 			path,
@@ -218,7 +193,7 @@ const file_system_actions = {
 		}
 	},
 
-	async decompress() {
+	async 'archive.decompress'() {
 		const { action, path, destination } = this
 
 		try {
@@ -236,7 +211,7 @@ const file_system_actions = {
 		}
 	},
 
-	async archive_list() {
+	async 'archive.list'() {
 		const { action, path } = this
 
 		try {
@@ -255,3 +230,27 @@ const file_system_actions = {
 } as const satisfies PActions
 
 export { file_system_actions, makeDir }
+
+const makeDir = (path: string) => mkdir(dirname(path), { recursive: true })
+const mapDir = (file: Dirent) => file.name + (file.isDirectory() ?  '/' : '')
+
+const run7z = (...args: string[]) => new Promise<{
+	stdout: string
+	stderr: string
+}>((res, rej) => {
+	const ps = spawn('7z', args, { stdio: 'pipe' })
+	let stdout = '', stderr = ''
+
+	ps.stdout.on('data', d => {
+		stdout += d.toString()
+	})
+
+	ps.stderr.on('data', d => {
+		stderr += d.toString()
+	})
+
+	ps.on('close', code => {
+		if (code === 0) res({ stdout, stderr })
+		else rej(new Error(stderr || `7z exited with ${code}`))
+	})
+})

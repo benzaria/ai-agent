@@ -8,7 +8,7 @@ export default defineConfig(
 
 	// Base config
 	{
-		files: ['src/**/*.{json,jsonc,js,mjs,cjs,ts,mts,cts}'],
+		files: ['src/**/*.{json,jsonc,js,ts}', 'test/**/*.{js,ts}'],
 		ignores: ['node_modules', 'dist', '.history'],
 
 		languageOptions: {
@@ -38,10 +38,10 @@ export default defineConfig(
 				ignoreComments: false,
 
 				// Ignore ternary expressions
-				ignoredNodes: [
-					'ConditionalExpression',
-					'ConditionalExpression > *',
-				],
+				// ignoredNodes: [
+				// 	'ConditionalExpression',
+				// 	'ConditionalExpression > *',
+				// ],
 
 			}],
 
@@ -85,14 +85,13 @@ export default defineConfig(
 
 	// JS override
 	{
-		files: ['src/**/*.{js,mjs,cjs}'],
+		files: ['src/**/*.js', 'test/**/*.js'],
 		...jsPlugin.configs.recommended,
 
 		rules: {
 			...jsPlugin.configs.recommended.rules,
 
-			strict: ['error', 'never'],
-
+			'strict': ['error', 'never'],
 			'no-unused-vars': ['warn', {
 				argsIgnorePattern: '^_',
 				varsIgnorePattern: '^_',
@@ -103,7 +102,7 @@ export default defineConfig(
 
 	// TS override
 	{
-		files: ['src/**/*.{ts,mts,cts}'],
+		files: ['src/**/*.ts', 'test/**/*.ts'],
 		plugins: { '@typescript-eslint': tsPlugin as any },
 
 		rules: {

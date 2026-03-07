@@ -1,21 +1,21 @@
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util'
+import { Color, echo } from '../utils/tui.ts'
 import { env } from '../utils/config.ts'
-import { echo } from '../utils/tui.ts'
 
 declare global {
-	const args: Prettify<
+	var args: Prettify<
     Omit<
       Required<typeof values>,
-      'headed' | 'model' | 'persona' | 'port'
+      'headed' | 'persona' | 'model' | 'port'
     > & {
       headless: boolean | 'new'
-      model: Models
 			persona: Personas
+      model: Models
 			port: number
     }
   >
 
-  const __args: string[]
+  var __args: string[]
 }
 
 const options = {
@@ -84,9 +84,10 @@ const _args: typeof args = { ...values as any }
 delete (_args as any)['headed']
 _args.headless = values.headed === true ? false : 'new'
 
-// @ts-expect-error Property 'args' does not exist on type 'typeof globalThis'.
 global.args = _args
-// @ts-expect-error Property '__args' does not exist on type 'typeof globalThis'.
 global.__args = positionals
 
-if (args.verbose) echo.inf('args:', { ..._args, headless: !values.headed })
+if (args.verbose) {
+	echo.vrb([Color.BR_BLUE, 'args'], { ..._args, headless: !values.headed })
+	echo.vrb([Color.BR_BLUE, 'env'], env)
+}

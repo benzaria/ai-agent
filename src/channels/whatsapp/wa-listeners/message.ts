@@ -1,26 +1,33 @@
 import {
 	reply,
-	getID,
+	getId,
 	getJid,
 	getUid,
 	isJidUser,
 	isJidGroup,
 	connection,
 	isJidBroadcast,
-	type MsgData,
-	type WAMessage,
+	downloadContentFromMessage,
 	type HandlerData,
+	type MediaType,
+	type proto,
 } from '../ws.ts'
 
+//! Do not change import to 'action.ts'
+import { makeDir } from '../../../agent/actions/file_system.ts'
 import { Color, echo } from '../../../utils/tui.ts'
 import { env } from '../../../utils/config.ts'
+import { writeFile } from 'node:fs/promises'
+import { extension } from 'mime-types'
+import { join } from 'node:path'
 
 const agentName = '@' + env.agent_name.toLowerCase()
-const agentLid = '@' + getID(env.agent_lid)
-const agentJid = '@' + getID(env.agent_jid)
+const agentLid = '@' + getId(env.agent_lid)
+const agentJid = '@' + getId(env.agent_jid)
 
 connection(
 	function () {
+
 		this.ev.on('messages.upsert', async ({ messages, type }) => {
 			if (type !== 'notify') return
 
@@ -52,22 +59,32 @@ connection(
 		})
 
 		this.ev.on('messages.reaction', async (reactions) => {
-			reactions.forEach(({ key, reaction }) => {
-				echo.cst([Color.BG_BLUE, 'reaction'], { key, reaction })
+			reactions.forEach(({ key: keyTo, reaction: { key: keyFrom, text: reaction } }) => {
+				echo.cst([Color.BG_BLUE, 'reaction'], { keyTo, keyFrom, reaction })
 			})
 		})
+
 	}
 )
 
-type Message = NonNullable<WAMessage['message']>
+type Message = proto.IMessage
+
+type MediaMessage = NonNullable<
+	| Message['imageMessage']
+	| Message['audioMessage']
+	| Message['videoMessage']
+	| Message['documentMessage']
+> & { fileName?: string | null }
 
 type ParsedMessage = Prettify<{
-  type?: string
+  type?: Returns<typeof getMessageType>
+	media?: string
   request?: string
 	mentions?: string[]
 	quoted?: {
 		from?: string
 		text?: string
+		media?: string
 	}
 }>
 
@@ -78,6 +95,9 @@ function unwrapMessage(m: Message) {
 	if (m.viewOnceMessage)
 		m = m.viewOnceMessage.message!
 
+	if (m.viewOnceMessageV2)
+		m = m.viewOnceMessageV2.message!
+
 	if (m.editedMessage)
 		m = m.editedMessage.message!
 
@@ -85,12 +105,15 @@ function unwrapMessage(m: Message) {
 }
 
 function getMessageType(m: Message) {
-	if (m.conversation || m.extendedTextMessage) return 'text'
-	if (m.imageMessage) return 'image'
-	if (m.videoMessage) return 'video'
-	if (m.audioMessage) return 'audio'
-	if (m.documentMessage) return 'document'
-	return 'unknown'
+	return (
+		/* eslint-disable indent */
+			m.conversation || m.extendedTextMessage ? 'text' :
+			m.imageMessage ? 'image' :
+			m.audioMessage ? 'audio' :
+			m.videoMessage ? 'video' :
+			m.documentMessage ? 'document' :
+			undefined
+	) /* eslint-enable indent */
 }
 
 function getMessageText(m: Message) {
@@ -104,27 +127,51 @@ function getMessageText(m: Message) {
 	)
 }
 
-function parseMessage(m: Message) {
+async function getMessageMedia(m: MediaMessage, type: MediaType) {
+	const stream = await downloadContentFromMessage(m, type)
+	const path = join(__agentdir, 'media',
+		`${Date.now()}_${m.fileName ?? `${type}.${extension(m.mimetype!)}`}`
+	)
+
+	let buffer = Buffer.from([])
+	for await (const chunk of stream) {
+		buffer = Buffer.concat([buffer, chunk])
+	}
+
+	await makeDir(path)
+	await writeFile(path, buffer)
+
+	return { path, buffer }
+}
+
+async function parseMessage(m: Message) {
 	m = unwrapMessage(m)
+
 	const result: ParsedMessage = {
 		type: getMessageType(m),
 		request: getMessageText(m),
 	}
 
-	const t = m.extendedTextMessage?.contextInfo?.mentionedJid
-	if (t && t.length) {
-		result.mentions = t
+	const mentions = m.extendedTextMessage?.contextInfo?.mentionedJid
+	if (mentions && mentions.length) {
+		result.mentions = mentions
 	}
 
-	const q = m.extendedTextMessage?.contextInfo?.quotedMessage
-	if (q) {
+	const quoted = m.extendedTextMessage?.contextInfo?.quotedMessage
+	if (quoted) {
 		result.quoted = {
 			from:
 				m.extendedTextMessage?.contextInfo?.participant ||
-				q.extendedTextMessage?.contextInfo?.participant ||
+				quoted.extendedTextMessage?.contextInfo?.participant ||
 				undefined,
-			text: parseMessage(q).request
+			text: getMessageText(quoted),
+			media: undefined //! implement
 		}
+	}
+
+	const type = result.type
+	if (type && type !== 'text') {
+		result.media = (await getMessageMedia(m[`${type}Message`]!, type)).path
 	}
 
 	return result
@@ -132,32 +179,28 @@ function parseMessage(m: Message) {
 
 async function userHandler(_this: HandlerData) {
 	const { jid, m } = _this
-	const parsed = parseMessage(m)
-	const { request, type } = parsed
+	const parsed = await parseMessage(m)
+	const { request } = parsed
 
 	if (!request) return
 
-	echo(type)
-
-	_this = {
+	const __this = {
 		..._this,
 		...parsed,
 		uid: jid,
 		request,
-	} satisfies MsgData as MsgData
+	}
 
-	await reply(_this)
+	await reply(__this)
 }
 
 async function groupHandler(_this: HandlerData) {
 	const { jid, m, msg } = _this
-	const parsed = parseMessage(m)
-	const { request, type, mentions } = parsed
+	const parsed = await parseMessage(m)
+	const { request, mentions } = parsed
 
 	if (!request) return
 	const lRequest = request.toLowerCase()
-
-	echo(type)
 
 	if (!(
 		mentions?.includes(env.agent_lid) ||
@@ -166,13 +209,13 @@ async function groupHandler(_this: HandlerData) {
 		lRequest.includes(agentJid)
 	)) return
 
-	_this = {
+	const __this = {
 		..._this,
 		...parsed,
 		gid: jid,
 		uid: getUid(msg),
 		request,
-	} satisfies MsgData as MsgData
+	}
 
-	await reply(_this)
+	await reply(__this)
 }

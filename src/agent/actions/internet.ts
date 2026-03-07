@@ -1,18 +1,18 @@
-import { errors, autoReply, type PActions } from './consts.ts'
+import { autoReply, errors, type PActions } from './consts.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { writeFile } from 'node:fs/promises'
 import { makeDir } from './file_system.ts'
 
 const internet_actions = {
 
-	web_search() {
+	async search() {
 		const { action, result } = this
 
 		echo.cst.ln([Color.GREEN, action], '\n' + result)
 		autoReply(this, `*[WEB SEARCH]*\n${result}`)
 	},
 
-	async fetch_api() {
+	async fetch() {
 		const { action, url, method = 'GET', headers = {}, body } = this
 
 		try {

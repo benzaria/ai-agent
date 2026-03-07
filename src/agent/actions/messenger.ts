@@ -1,9 +1,9 @@
-import { getID, type AnyMessageContent } from '../../channels/whatsapp/ws.ts'
-import { autoReply, returns, errors, type PActions } from './consts.ts'
-import { importJson } from '../../utils/helpers.ts'
+import { autoReply, returns, errors, mapKey, type PActions } from './consts.ts'
+import { getId, type AnyMessageContent } from '../../channels/whatsapp/ws.ts'
+import { hotImport, queue } from '../../utils/helpers.ts'
+import { writeFile, readFile } from 'node:fs/promises'
 import { Color, echo } from '../../utils/tui.ts'
-import { writeFile } from 'node:fs/promises'
-import { readFile } from 'node:fs/promises'
+import { Obj } from '../../utils/object.ts'
 import { env } from '../../utils/config.ts'
 import { basename } from 'node:path'
 import { join } from 'path'
@@ -21,7 +21,7 @@ const messenger_actions = {
 			to, uid, gid,
 		} = this
 
-		const target = `@${getID(to)}`
+		const target = '@' + getId(to)
 		const _mentions = [...mentions ?? [], to]
 
 		echo.cst([Color.GREEN, action], { to, uid, gid, file, mentions }, '\n' + message)
@@ -59,26 +59,71 @@ const messenger_actions = {
 			.catch(err => errors(this, err))
 	},
 
-	contact() {
-		const { action, keywords } = this
+	async 'contact.has'() {
+		const { action, name = '', keywords = [] } = this
+		echo.cst.ln([Color.CYAN, action], { keywords })
 
-		echo.cst.ln([Color.GREEN, action], keywords)
+		let contact: number | Contacts | undefined
 
-		const lKeywords: string[] = keywords
-			.map((key: string) => key.toLowerCase())
+		contact = contacts.get(name)
+		if (contact)
+			return await returns(this, { [name]: contact })
 
-		const contact = Object.entries(global.contacts)
-			.filter(
-				([name]) => (
-					lKeywords.filter(
+		const lKeywords = mapKey(keywords)
+
+		contact = contacts
+			._filter(
+				(_number, name) => (
+					lKeywords.some(
 						key => name
 							.toLowerCase()
 							.includes(key)
 					)
-				).length
+				)
 			)
 
-		returns(this, Object.fromEntries(contact))
+		await returns(this, contact)
+	},
+
+	async 'contact.get'() {
+		const { action, name = '' } = this
+		echo.cst.ln([Color.CYAN, action], { name })
+
+		const contact = contacts.get(name)
+		if (!contact)
+			return errors(this, { msg: 'Contact not found' })
+
+		await returns(this, { [name]: contact })
+	},
+
+	'contact.set'() {
+		const { action, name = '', number } = this
+		echo.cst.ln([Color.CYAN, action], { name, number })
+
+		if (!number)
+			return errors(this, { msg: 'Missing number' })
+
+		if (contacts.has(name))
+			return errors(this, { msg: 'Contact already exists' })
+
+		contacts.set(name, number)
+		saveContacts()
+
+		autoReply(this, `*[WRITE]* \`contact: ${name}\``)
+	},
+
+	'contact.del'() {
+		const { action, name = '' } = this
+		echo.cst.ln([Color.CYAN, action], { name })
+
+		const contact = contacts.has(name)
+		if (!contact)
+			return errors(this, { msg: 'Contact not found' })
+
+		contacts.delete(name)
+		saveContacts()
+
+		autoReply(this, `*[DELETE]* \`contact: ${name}\``)
 	},
 
 } as const satisfies PActions
@@ -95,56 +140,58 @@ export { messenger_actions }
 	END:VCARD
 `
 
+type VCard = [name: string, jid: number]
+type Contacts = Record<string, number>
+
+const parseVCard = (vcard: string) => {
+	const match = vcard.match(/FN:(.+)[\s\S]*waid=(\d+)/) || []
+	return [match[1], +match[2]] as VCard
+}
+
 const contactPath = join(__agentdir, 'contact.json')
 
-const getContact = (vcard: string) => {
-	const match = vcard.match(/FN:(.+)[\s\S]*waid=(\d+)/) || []
-
-	return { name: match[1].toLowerCase(), jid: +match[2] }
-}
-
-async function loadContact() {
-	if (global.contacts) return global.contacts
+async function loadContacts(force: boolean = false) {
+	if (global.contacts && !force) return global.contacts
+	let contacts: Contacts
 
 	try {
-		return global.contacts = await importJson(contactPath)
-	} catch {
-		echo.wrn(`Contacts are not setup at: "${contactPath}"`.replaceAll('\\', '/'))
-
-		global.contacts = {
-			[env.agent_name.toLowerCase()]: getID(env.agent_jid)
-		}
-
-		saveContact()
+		contacts = await hotImport(contactPath)
 	}
-}
-
-async function saveContact(vcard?: string) {
-
-	if (vcard) {
-		const { name, jid } = getContact(vcard)
-
-		Object.assign(
-			global.contacts,
-			{
-				[name]: jid
-			}
-		)
+	catch (err) {
+		echo.err(err)
+		contacts = { [env.agent_name]: getId(env.agent_jid) }
 	}
 
-	writeFile(
-		contactPath,
-		JSON.stringify(
-			global.contacts,
-			null, 2
-		)
-	).catch(echo.err)
+	echo.vrb([Color[256][33], 'contacts'], contacts)
+	global.contacts = new Obj(contacts)
+	return saveContacts()
 }
 
-await loadContact()
+const saveContacts = queue(
+	async function (vcard?: string | VCard) {
+		if (typeof vcard === 'string')
+			vcard = parseVCard(vcard)
+
+		if (vcard) contacts.set(...vcard)
+
+		await writeFile(
+			contactPath,
+			contacts.json(2)
+		).catch(echo.err)
+
+		return contacts
+	}
+)
+
+await loadContacts(global.isReloading)
 
 export {
-	loadContact,
-	saveContact,
-	getContact,
+	loadContacts,
+	saveContacts,
+	parseVCard,
+}
+
+export type {
+	Contacts,
+	VCard,
 }

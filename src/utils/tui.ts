@@ -1,15 +1,58 @@
-import { voidFn } from './helpers.ts'
+import { inspect, type InspectOptions } from 'node:util'
+import { entries, Obj } from './object.ts'
 import { stdout } from 'node:process'
-import { inspect,type InspectOptions } from 'node:util'
+import { voidFn } from './helpers.ts'
 
 // Enum exports
 export type Ansi = ValueOf<typeof Ansi>
 export type Color = Exclude<ValueOf<typeof Color>, AnyFunction>
 
-type JoinFn = {
-	(colors: (number | string)): string
-	(...colors: (number | string)[]): string
+type Codes =
+	| 0 | 1 | 2 | 3 | 4 | 5 | 7 | 8 | 9								//* ST
+	| 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37						//? FG
+	| 90 | 91 | 92 | 93 | 94 | 95 | 96 | 97						//+ FG
+	| 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47						//? BG
+	| 100 | 101 | 102 | 103 | 104 | 105 | 106 | 107		//+ BG
+
+type Codes256 =
+ | 0  | 1 |  2 |  3 |  4 |  5 |  6 |  7 |  8 |  9 |  10 | 11 | 12 | 13 | 14 | 15
+ | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31
+ | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47
+ | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60 | 61 | 62 | 63
+ | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 | 73 | 74 | 75 | 76 | 77 | 78 | 79
+ | 80 | 81 | 82 | 83 | 84 | 85 | 86 | 87 | 88 | 89 | 90 | 91 | 92 | 93 | 94 | 95
+ | 96 | 97 | 98 | 99 | 100 |101 |102 |103 |104 |105 |106 |107 |108 |109 |110 |111
+ | 112 |113 |114 |115 |116 |117 |118 |119 |120 |121 |122 |123 |124 |125 |126 |127
+ | 128 |129 |130 |131 |132 |133 |134 |135 |136 |137 |138 |139 |140 |141 |142 |143
+ | 144 |145 |146 |147 |148 |149 |150 |151 |152 |153 |154 |155 |156 |157 |158 |159
+ | 160 |161 |162 |163 |164 |165 |166 |167 |168 |169 |170 |171 |172 |173 |174 |175
+ | 176 |177 |178 |179 |180 |181 |182 |183 |184 |185 |186 |187 |188 |189 |190 |191
+ | 192 |193 |194 |195 |196 |197 |198 |199 |200 |201 |202 |203 |204 |205 |206 |207
+ | 208 |209 |210 |211 |212 |213 |214 |215 |216 |217 |218 |219 |220 |221 |222 |223
+ | 224 |225 |226 |227 |228 |229 |230 |231 |232 |233 |234 |235 |236 |237 |238 |239
+ | 240 |241 |242 |243 |244 |245 |246 |247 |248 |249 |250 |251 |252 |253 |254 |255
+
+type RCodes256<T extends Codes256 = Codes256> = `38;5;${T}`
+
+type FnJoin = {
+	(colors: (Codes | string)): string
+	(...colors: (Codes | string)[]): string
 }
+
+type Fn256 =
+	& SyncFn<[id: Codes256], RCodes256>
+	& Record<Codes256, RCodes256>
+
+const color = (id: Color[] | Color | string, str: string = '') =>
+	`${Ansi.CSI}${
+		typeof id === 'string' ? id : Color.join(id as any)
+	}m${str}${Ansi.CSI}0m`
+
+const color256 = (id: Codes256 | string, str?: string) =>
+	color(`38;5;${id}`, str)
+
+const linker = (text: string, link: string) =>
+	`${Ansi.OSC}8;;${link}${Ansi.BEL}${text}${Ansi.OSC}8;;${Ansi.BEL}`
 
 const ESC = '\x1b'
 
@@ -33,22 +76,27 @@ const Ansi = {
 const Color = {
 
 	join: ((...input: AnyArray) => {
-
 		const codes =
 			Array.isArray(input[0])
 				? input[0]
 				: input
 
 		return codes
-			.filter(Boolean)
+			// .filter(Boolean)
 			.join(';')
 
-	}) as JoinFn,
+	}) as FnJoin,
 
-	// Reset
+	256: new Proxy(
+		voidFn as unknown as Fn256,
+		{
+			apply: (_, __, [id]) => `38;5;${id}`,
+			get: (_, id: string) => `38;5;${id}`,
+		}
+	),
+
+	//* Styles
 	RESET: 0,
-
-	// Styles
 	BOLD: 1,
 	DIM: 2,
 	ITALIC: 3,
@@ -58,7 +106,7 @@ const Color = {
 	HIDDEN: 8,
 	STRIKETHROUGH: 9,
 
-	// Foreground colors
+	//? Foreground colors
 	BLACK: 30,
 	RED: 31,
 	GREEN: 32,
@@ -68,7 +116,7 @@ const Color = {
 	CYAN: 36,
 	WHITE: 37,
 
-	// Bright foreground colors
+	//+ Bright foreground colors
 	BR_BLACK: 90,
 	BR_RED: 91,
 	BR_GREEN: 92,
@@ -78,7 +126,7 @@ const Color = {
 	BR_CYAN: 96,
 	BR_WHITE: 97,
 
-	// Background colors
+	//? Background colors
 	BG_BLACK: 40,
 	BG_RED: 41,
 	BG_GREEN: 42,
@@ -88,7 +136,7 @@ const Color = {
 	BG_CYAN: 46,
 	BG_WHITE: 47,
 
-	// Bright background colors
+	//+ Bright background colors
 	BG_BR_BLACK: 100,
 	BG_BR_RED: 101,
 	BG_BR_GREEN: 102,
@@ -99,16 +147,14 @@ const Color = {
 	BG_BR_WHITE: 107,
 } as const
 
-const color = (id: Color[] | Color | string, str: string) =>
-	`${Ansi.CSI}${typeof id === 'string' ? id : Color.join(id as any)}m${str}${Ansi.CSI}0m`
-
-const color256 = (id: number | string, str: string) => color(`38;5;${id}`, str)
-
 type EchoLevel = keyof EchoMap
 type EchoMap = typeof echoMap
 type EchoLvlc = 'cst' | 'vrb'
 
-type EchoTupleType = readonly [id: Color[] | Color, str: string]
+type EchoTupleType =
+	| readonly [id: Color[] | Color, str: string]
+	| readonly [id: RCodes256, str: string]
+
 type EchoTuple =
 	| EchoTupleType
 	| EchoMap[EchoLevel]
@@ -138,23 +184,21 @@ type Echo =
 	& { [K in EchoLvlc]: WithLine<EchoFnc> }
 	& { [K in Exclude<EchoLevel, 'err' | 'isp'>]: WithLine<EchoFn> }
 
-const echoCache = new Map<PropertyKey, any>()
+const echoCache = new Obj<string, SyncFn<AnyArray>>()
 
 const echoMap = {
 	inf: [Color.BR_BLUE, 'info'],
-	wrn: [Color.BR_YELLOW, 'warn'],
 	err: [Color.BR_RED, 'error'],
-	scs: [Color.GREEN, 'success'],
 	isp: [Color.CYAN, 'inspect'],
+	scs: [Color.GREEN, 'success'],
+	wrn: [Color.BR_YELLOW, 'warn'],
 	unk: [Color.MAGENTA, 'unknown'],
-
 } as const satisfies Record<string, EchoTupleType>
 
 const withMap = {
 	ln: Ansi.LF,
-	lr: `${Ansi.CSI}1A${Ansi.CR}`,
 	ld: `${Ansi.CSI}K`,
-
+	lr: `${Ansi.CSI}1A${Ansi.CR}`,
 } as const satisfies Record<string, string>
 
 //--- Suppresses internal logs ---
@@ -162,7 +206,7 @@ const _write = stdout.write.bind(stdout)
 const _log = console.log.bind(console)
 
 const ignoreList = [
-	'SessionEntry',       // Baileys session logs
+	'SessionEntry',				//? Baileys session logs
 ]
 
 stdout.write = (chunk: string | Buffer, encodingOrCallback?: any, callback?: () => void): boolean => {
@@ -185,14 +229,14 @@ stdout.write = (chunk: string | Buffer, encodingOrCallback?: any, callback?: () 
 const echoFn = ([id, str]: [Color, string], ...args: AnyArray) =>
 	_log(`${withMap.ld}[${color(`1;${id}`, str.toUpperCase())}]`, ...args)
 
-const echoLevel = (p: PropertyKey): EchoTuple =>
-	(echoMap as any)[p] ?? echoMap.unk
+const echoLevel = (p: string): EchoTuple =>
+	echoMap[p as EchoLevel] ?? echoMap.unk
 
-const withLine = <T extends AnyFunction>(fn: T) => {
+const withLine = <T extends SyncFn<AnyArray>>(fn: T) => {
 
-	(Object.entries(withMap) as AnyArray).forEach(
-		([prop, str]: [WithProp, string]) => {
-			;(fn as any)[prop] = (...args: AnyArray) => fn(...args, str)
+	entries(withMap).forEach(
+		([prop, str]) => {
+			(fn as any)[prop] = (...args: AnyArray) => fn(...args, str)
 		},
 	)
 
@@ -202,17 +246,19 @@ const withLine = <T extends AnyFunction>(fn: T) => {
 const echo = new Proxy(echoFn as Echo,
 	{
 		apply(_, __, _args) {
-			_log(..._args, `${Ansi.CSI}K`)
+			_log(..._args, withMap.ld)
 		},
 
 		get(call, prop: string) {
-			if (echoCache.has(prop)) return echoCache.get(prop)
+			if (echoCache.has(prop))
+				return echoCache.get(prop)
 
 			if (prop in withMap) {
 				const fn = (..._args: AnyArray) =>
 					_log(..._args, withMap[prop as WithProp] ?? '')
 
-				return echoCache.set(prop, fn), fn
+				echoCache.set(prop, fn)
+				return fn
 			}
 
 			const fn = (..._args: AnyArray) => call(echoLevel(prop), ..._args)
@@ -231,7 +277,7 @@ const echo = new Proxy(echoFn as Echo,
 				const err = _args[0]
 				if (
 					Error.isError(err) && _args.length === 1) {
-					return fn(args.verbose ? err : err.message)
+					return fn(global.args?.verbose ? err : err.message)
 				}
 
 				return fn(..._args)
@@ -242,10 +288,10 @@ const echo = new Proxy(echoFn as Echo,
 					depth: null,
 					colors: true
 				}
-			) => (args.verbose ? fn : voidFn)(inspect(obj, opt))
+			) => (global.args?.verbose ? fn : voidFn)(inspect(obj, opt))
 
-			const fnv = (..._args: AnyArray) => (args.verbose ? fnc : voidFn)(..._args)
-			const fni = (..._args: AnyArray) => (args.verbose ? fn : voidFn)(..._args)
+			const fnv = (..._args: AnyArray) => (global.args?.verbose ? fnc : voidFn)(..._args)
+			const fni = (..._args: AnyArray) => (global.args?.verbose ? fn : voidFn)(..._args)
 
 			const caller = withLine(
 				/* eslint-disable indent */
@@ -257,20 +303,24 @@ const echo = new Proxy(echoFn as Echo,
 					fn
 			) /* eslint-enable indent */
 
-			return echoCache.set(prop, caller), caller
+			echoCache.set(prop, caller)
+			return caller
 		},
 	},
 )
 
-const __linker = (text: string, link: string) =>
-	`${Ansi.OSC}8;;${link}${Ansi.BEL}${text}${Ansi.OSC}8;;${Ansi.BEL}`
-
 export {
-	echoMap,
 	color256,
-	__linker,
-	echo,
+	echoMap,
+	linker,
 	color,
 	Color,
 	Ansi,
+	echo,
+}
+
+export type {
+	RCodes256,
+	Codes256,
+	Codes,
 }

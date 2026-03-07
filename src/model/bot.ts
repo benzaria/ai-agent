@@ -1,4 +1,5 @@
-import '../cli/args.ts'
+/// <reference lib="dom" />
+
 import puppeteer from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { instructions, type Instructions, type InstructionsType } from '../agent/instructions.ts'
@@ -7,6 +8,9 @@ import { Color, echo } from '../utils/tui.ts'
 import { delay } from '../utils/helpers.ts'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
+
+// const { instructions } = await hotImport('src/agent/instructions.ts') as typeof import('../agent/instructions.ts')
+// global.instructions = lazy(async () => (await hotImport('src/agent/instructions.ts') as typeof import('../agent/instructions.ts')).instructions)
 
 // --- CLEANUP LOGIC ---
 global.shutdown = async () => {
@@ -20,9 +24,10 @@ global.shutdown = async () => {
 }
 
 async function initEngine(headless: boolean | 'new') {
-	puppeteer.use(StealthPlugin())
-
+	if (global.page) return
 	echo.inf.lr('Initializing Engine...' )
+
+	puppeteer.use(StealthPlugin())
 	global.browser = await puppeteer.launch({
 		headless: headless as any,
 		userDataDir: env.user_data,
@@ -58,8 +63,10 @@ async function initEngine(headless: boolean | 'new') {
 }
 
 async function initProvider(model: Models) {
+	if (global.provider) return
+	echo.inf.lr('Initializing Provider...')
+
 	try {
-		echo.inf.lr('Initializing Provider...')
 		const spl = model.split('/') as [Providers, LLMs]
 		global.provider = spl[0]
 		global.model = spl[1]
@@ -67,7 +74,7 @@ async function initProvider(model: Models) {
 		await page.bringToFront()
 		await page.goto(
 			providers[provider]['api'] + (
-				/* eslint-disable indent */
+			/* eslint-disable indent */
 					args['new-conv'] ? '' :
 					args['best-conv'] && env.best_conversation ? `c/${env.best_conversation.uuid}` :
 					env.conversation ? `c/${env.conversation.uuid}` : ''
@@ -104,6 +111,7 @@ async function initModel(instructions: InstructionsType): Promise<void>;
 async function initModel(instructions: Instructions, persona: Personas): Promise<void>;
 async function initModel(instructions: Instructions | InstructionsType, persona?: Personas) {
 	echo.inf.lr('Initializing Model...')
+
 	global.instructions = persona ? instructions[persona] : instructions
 	global.persona = persona ?? args.persona
 
@@ -196,6 +204,8 @@ async function initBot() {
 			/* eslint-enable indent */
 		) as Personas
 	)
+
+	global.isReady = true
 }
 
 // This ensures it only runs if called directly

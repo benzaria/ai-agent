@@ -2,27 +2,34 @@
 export * from './actions/file_system.ts'
 export * from './actions/messenger.ts'
 export * from './actions/internet.ts'
+export * from './actions/command.ts'
 export * from './actions/system.ts'
 export * from './actions/math.ts'
 
 import type { Actions, ActionsType } from './actions/consts.ts'
-import { autoReply, returns, errors } from './actions/consts.ts'
+export type { Actions, ActionsType }
 
-import { file_system_actions } from './actions/file_system.ts'
-import { messenger_actions } from './actions/messenger.ts'
-import { internet_actions } from './actions/internet.ts'
-import { system_actions } from './actions/system.ts'
-import { math_actions } from './actions/math.ts'
+import { HotImport } from '../utils/helpers.ts'
+const hotImport = new HotImport(import.meta.dirname + '/actions')
+
+// Cache buster imports for hot actions reloads
+const { autoReply, returns, errors } = await hotImport('consts.ts') as typeof import('./actions/consts.ts')
+const { file_system_actions } = await hotImport('file_system.ts') as typeof import('./actions/file_system.ts')
+const { messenger_actions } = await hotImport('messenger.ts') as typeof import('./actions/messenger.ts')
+const { internet_actions } = await hotImport('internet.ts') as typeof import('./actions/internet.ts')
+const { command_actions } = await hotImport('command.ts') as typeof import('./actions/command.ts')
+const { system_actions } = await hotImport('system.ts') as typeof import('./actions/system.ts')
+const { math_actions } = await hotImport('math.ts') as typeof import('./actions/math.ts')
 
 const actions = {
 
 	...file_system_actions,
 	...messenger_actions,
 	...internet_actions,
+	...command_actions,
 	...system_actions,
 	...math_actions,
 
 } as const satisfies Actions
 
 export { actions, autoReply, returns, errors }
-export type { Actions, ActionsType }

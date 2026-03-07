@@ -1,8 +1,7 @@
+import { type Codes256, Color, echo } from '../src/utils/tui.ts'
+import { exit } from 'node:process'
 import '../src/cli/args.ts'
-import { delay } from '../src/utils/helpers.ts'
-import { echo } from '../src/utils/tui.ts'
 
-// @ts-ignore
 global.args.verbose = true
 
 echo('test_start')
