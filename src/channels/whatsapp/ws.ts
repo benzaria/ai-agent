@@ -1,6 +1,5 @@
 import {
 	createWASocket,
-	connection,
 	type CreateSocketOpts,
 } from './wa-socket.ts'
 
@@ -14,8 +13,8 @@ import {
 
 //! Do not change imports to 'action.ts'
 import { parser, runAction } from '../../agent/interaction.ts'
+import { queue, delay, repeat } from '../../utils/helpers.ts'
 import { autoReply } from '../../agent/actions/consts.ts'
-import { queue, delay } from '../../utils/helpers.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { ask } from '../../model/bot.ts'
 import './wa-listeners.ts'
@@ -59,13 +58,13 @@ async function initWASocket(opts?: CreateSocketOpts) {
 	return global.ws
 }
 
-function slashCommand(_this: MsgData, request: string) {
-	if (!request.startsWith('/')) return false
-	request = request
+function slashCommand(_this: MsgData, command = _this.request): void | true {
+	if (!command.startsWith('/')) return
+	command = command
 		.toLowerCase()
 		.slice(1)
 
-	switch (request) {
+	switch (command) {
 		case 'ping':
 			autoReply(_this, 'pong 🏓')
 			break
@@ -75,13 +74,17 @@ function slashCommand(_this: MsgData, request: string) {
 		case 'reload':
 			runAction({
 				..._this as any,
-				action: `sys.${request}`,
+				action: `sys.${command}`,
 				reason: 'Exec slash command'
 			})
 			break
 
+			// case env.admin_key:
+
+			// 	break
+
 		default:
-			return false
+			return
 	}
 
 	return true
@@ -90,7 +93,7 @@ function slashCommand(_this: MsgData, request: string) {
 const reply = queue(
 	async function (_this: MsgData) {
 		const {
-			jid, uid, gid,
+			uid, gid,
 			msg: { key },
 			mentions,
 			request,
@@ -103,10 +106,10 @@ const reply = queue(
 		echo.isp(_this)
 
 		// Handle Slash Commands
-		if (slashCommand(_this, request)) return
+		if (slashCommand(_this)) return
 
 		// Mark as Typing
-		const typing = startTyping(jid)
+		const typing = startTyping(_this)
 
 		// Handle Ask and Parser
 		const response = await ask({
@@ -123,7 +126,7 @@ const reply = queue(
 	}
 )
 
-function startTyping(jid: string, interval = '.5'.s, timeout = '5'.s) {
+function startTyping({ jid }: MsgData, interval = '.5'.s, timeout = '5'.s) {
 
 	const start = () => {
 		ws.sendPresenceUpdate('composing', jid)
@@ -132,18 +135,21 @@ function startTyping(jid: string, interval = '.5'.s, timeout = '5'.s) {
 	}
 
 	const stop = () => {
-		clearInterval(id)
+		timer.clear()
 		ws.sendPresenceUpdate('paused', jid)
 		!global.typing || echo.vrb([Color.BR_GREEN, 'typing'], 'stoped')
 		global.typing = 0
 	}
 
-	const id = setInterval(() => {
-		if (global.typing <= 0 || !global.typing) start()
-		global.typing -= interval
-	}, interval)
+	const timer = repeat(
+		function () {
+			if (global.typing <= 0 || !global.typing) start()
+			global.typing -= interval
+		},
+		interval
+	)
 
-	delay('2'.m, stop)
+	delay(stop, '2'.m)
 
 	return { stop }
 }

@@ -12,7 +12,7 @@ fn1.call('test1', '2'.s)
 fn1.call('test2', '1'.s)
 
 echo(fn1.pending, fn1.count)
-delay('2.5'.s, () => echo(fn1.pending, fn1.count))
+delay(() => echo(fn1.pending, fn1.count), '2.5'.s)
 await fn1.idle()
 echo(fn1.pending, fn1.count)
 

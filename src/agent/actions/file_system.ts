@@ -142,7 +142,7 @@ const file_system_actions = {
 		} = this
 
 		try {
-			echo.cst([Color.MAGENTA, action], path)
+			echo.cst([Color.MAGENTA, action], { path, destination, archive })
 
 			await makeDir(path)
 
@@ -180,7 +180,7 @@ const file_system_actions = {
 
 			else {
 				throw new Error(
-					`Unsupported archive: ${archive}`
+					`Unsupported archive: '${archive}'`
 				)
 			}
 
@@ -197,7 +197,7 @@ const file_system_actions = {
 		const { action, path, destination } = this
 
 		try {
-			echo.cst([Color.CYAN, action], path)
+			echo.cst([Color.CYAN, action], { path, destination })
 
 			await makeDir(destination)
 			await run7z('x', path, `-o${destination}`, '-y')

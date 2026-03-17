@@ -1,3 +1,4 @@
+import '../utils/event.ts'
 import '../cli/args.ts'
 import { initWASocket } from '../channels/whatsapp/ws.ts'
 import { initBot } from '../model/bot.ts'

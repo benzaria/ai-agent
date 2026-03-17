@@ -14,7 +14,7 @@
 		"start:agent:tui": "node ./src/cli/agent.ts",
 		"start:chat": "node ./src/cli/chat.ts",
 		"start:api": "node ./src/model/api.ts",
-		"test": "pwsh -nop 'scripts/run.ps1' -dir test -file",
+		"test": "pwsh -nop 'scripts/run-test.ps1' -dir test -file",
 		"test:bot": "node ./src/model/bot.ts",
 		"test:channel:ws": "node ./src/channels/whatsapp/ws.ts",
 		"test:channel:tl": "node ./src/channels/telegram/tl.ts",

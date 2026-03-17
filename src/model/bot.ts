@@ -1,4 +1,5 @@
-/// <reference lib="dom" />
+// / <reference lib="dom" />
+//@ts-nocheck
 
 import puppeteer from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
@@ -120,7 +121,7 @@ async function initModel(instructions: Instructions | InstructionsType, persona?
 	const res = await ask({ request: 'status', ...global.instructions })
 	args.verbose = verbose
 
-	if (res?.includes('OK'))
+	if (res.includes('OK'))
 		echo.scs('Model ready.')
 	else
 		echo.wrn('Model initialization failed:', res)
@@ -129,13 +130,15 @@ async function initModel(instructions: Instructions | InstructionsType, persona?
 		return location.pathname.startsWith('/c/')
 	}, { timeout: env.timeout })
 
-	const conversation = {
-		persona: global.persona,
-		uuid: page.url().split('/c/')[1]
-	}
-	echo.inf.ln('Conversation:', conversation)
+	secrets.set({
+		conversation: {
+			persona: global.persona,
+			uuid: page.url().split('/c/')[1]
+		}
+	})
+	// saveSecrets()
 
-	saveSecrets({ conversation })
+	echo.inf.ln('Conversation:', secrets.get('conversation'))
 }
 
 async function ask(p: object | string) {
@@ -206,6 +209,7 @@ async function initBot() {
 	)
 
 	global.isReady = true
+	;(global?.event as any)?.emit?.('Agent-ready')
 }
 
 // This ensures it only runs if called directly

@@ -20,6 +20,7 @@ const { internet_actions } = await hotImport('internet.ts') as typeof import('./
 const { command_actions } = await hotImport('command.ts') as typeof import('./actions/command.ts')
 const { system_actions } = await hotImport('system.ts') as typeof import('./actions/system.ts')
 const { math_actions } = await hotImport('math.ts') as typeof import('./actions/math.ts')
+const {} = await hotImport('events.ts') as typeof import('./actions/events.ts')
 
 const actions = {
 

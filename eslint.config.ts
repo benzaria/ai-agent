@@ -65,11 +65,17 @@ export default defineConfig(
 		},
 	},
 
-	// Override for just one file
+	// Overrides for single files
 	{
 		files: ['src/utils/tui.ts'],
 		rules: {
 			'no-console': 'off',
+		},
+	},
+	{
+		files: ['src/model/bot.ts'],
+		rules: {
+			'@typescript-eslint/ban-ts-comment': 'off',
 		},
 	},
 

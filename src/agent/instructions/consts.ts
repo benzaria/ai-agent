@@ -23,9 +23,9 @@ export type {
 
 
 const string: string = 'string'
-const stringArr: string[] = [string]
 const number: number = 'number' as any
 const code: unique symbol = string as any
+const stringArr: string[] = 'string[]' as any
 
 type Code = typeof code
 type IsCode<T> = T extends Code ? true : false

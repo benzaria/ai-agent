@@ -1,6 +1,6 @@
-import { autoReply, returns, errors, mapKey, type PActions } from './consts.ts'
-import { runAction, supportError } from '../interaction.ts'
-import { hotImport, queue, repeat, until } from '../../utils/helpers.ts'
+import { autoReply, returns, errors, mapKey, type PActions, type ActionsType } from './consts.ts'
+import { hotImport, queue } from '../../utils/helpers.ts'
+import { parser, runAction } from '../interaction.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { Obj } from '../../utils/object.ts'
 import { env } from '../../utils/config.ts'
@@ -12,20 +12,82 @@ const command_actions = {
 
 	async execute() {
 		const { action, command } = this
-
 		echo.cst.ln([Color.GREEN, action], command)
 
 		await new AsyncFunction(command)()
-			.then(result => returns(this, result))
+			.then(res => returns(this, res))
 			.catch(err => errors(this, err))
 	},
 
 	auth_user() {
-		const { action } = this
-		supportError(this, action)
+		const { action, user } = this
+		echo.cst.ln([Color.GREEN, action], user)
+
+		// supportError(this, action)
+
+		secrets.set('auth_users', [
+			...secrets.get('auth_users') ?? [],
+			user
+		])
+		// saveSecrets()
+
+		autoReply(this, `*[AUTH]* user: \`${user}\``)
 	},
 
 	/* ---------------- JOB METHODS ---------------- */
+
+	'job.start'() {
+		const { action, id = '' } = this
+		echo.cst.ln([Color.CYAN, action], { id })
+
+		const job = jobs.get(id)
+		if (!job)
+			return errors(this, { msg: 'Job not found' })
+
+		jobs.set(id, cronJob(this, job))
+		autoReply(this, `*[START]* job: \`${id}\``)
+	},
+
+	'job.stop'() {
+		const { action, id = '' } = this
+		echo.cst.ln([Color.CYAN, action], { id })
+
+		const job = jobs.get(id)
+		if (!job)
+			return errors(this, { msg: 'Job not found' })
+
+		job.timer?.stop()
+		autoReply(this, `*[STOP]* job: \`${id}\``)
+	},
+
+	async 'job.runing'() {
+		const { action, id = '', keywords } = this
+		echo.cst.ln([Color.CYAN, action], { id })
+
+		let job: Job | Jobs | undefined
+
+		job = jobs.get(id)
+		if (job && job.timer)
+			return await returns(this, { [id]: mapJob(job) })
+
+		const lKeywords = mapKey(keywords)
+
+		job = jobs
+			.filter(
+				(job, _id) => (
+					_id.includes(id) ||
+					lKeywords.some(
+						key => (
+							job.description
+								.toLowerCase()
+								.includes(key)
+						)
+					)
+				) && job.timer
+			)._map(mapJob)
+
+		await returns(this, job)
+	},
 
 	async 'job.run'() {
 		const { action, id = '' } = this
@@ -35,10 +97,8 @@ const command_actions = {
 		if (!job)
 			return errors(this, { msg: 'Job not found' })
 
-		// job.timer?.stop()
 		job.lastRun = Date.now()
 		jobs.set(id, job)
-		saveJobs()
 
 		await runJob(this, job)
 	},
@@ -84,22 +144,24 @@ const command_actions = {
 	},
 
 	'job.set'() {
-		const { action, description = '', command, cron, keywords } = this
-		let { id } = this
-		echo.cst.ln([Color.CYAN, action], { id, command, cron })
+		let { action, id, keywords } = this
+		let job: Job | undefined
 
-		if (!command)
-			return errors(this, { msg: 'Missing command' })
+		if (id && jobs.has(id))
+			job = jobs.get(id)
 
-		if (jobs.has(id ??= genJobId(mapKey(keywords))))
-			return errors(this, { msg: 'Job already exists' })
+		let { actions, description = '', cron } = { ...job, ...this }
+		id ??= genJobId(mapKey(keywords))
 
-		const job: Job = { id, description, command, cron }
+		echo.cst.ln([Color.CYAN, action], { id, actions, cron })
 
-		jobs.set(id, cronJob(this, job))
-		saveJobs()
+		if (!actions)
+			return errors(this, { msg: 'Missing actions' })
 
-		// returns(this, { id, request: 'none' })
+		job = { id, description, actions, cron }
+
+		jobs.set(id, job)
+
 		autoReply(this, `*[WRITE]* job: \`${id}\``)
 	},
 
@@ -113,7 +175,6 @@ const command_actions = {
 
 		job.timer?.stop()
 		jobs.delete(id)
-		saveJobs()
 
 		autoReply(this, `*[DELETE]* job: \`${id}\``)
 	},
@@ -125,11 +186,11 @@ export { command_actions }
 type Job = {
 	id: string
 	cron?: string
-	command: string
+	actions: ActionsType[]
 	description: string
 } & {
 	lastRun?: number
-	/** @runtime */
+	/** @runtime cron */
 	timer?: CronJob
 }
 
@@ -152,7 +213,7 @@ const genJobId = ([type]: string[]) =>
 		Math.random().toString(36).slice(2, 8)
 	}`
 
-function cronJob({ jid }: { jid: string }, job: Job) {
+function cronJob({ jid, uid = jid }: { jid: string, uid?: string }, job: Job) {
 	if (job.cron) {
 		echo.cst([Color.CYAN, 'job.cron'], job)
 
@@ -162,8 +223,8 @@ function cronJob({ jid }: { jid: string }, job: Job) {
 			onTick: function () {
 				runAction({
 					action: 'job.run',
-					jid, uid: jid,
 					id: job.id,
+					jid, uid,
 				} as any)
 			}
 		})
@@ -172,11 +233,12 @@ function cronJob({ jid }: { jid: string }, job: Job) {
 	return job
 }
 
-async function runJob(_this: { jid: string }, job: Job) {
-
-	await new AsyncFunction(job.command)()
-		.then(res => returns(_this as any, res))
-		.catch(err => errors(_this as any, err))
+async function runJob(_this: { jid: string, uid?: string }, job: Job) {
+	if (job.actions)
+		await parser({
+			..._this as any,
+			response: job.actions
+		})
 }
 
 const jobsPath = join(__agentdir, 'jobs.json')
@@ -194,15 +256,17 @@ async function loadJobs(force: boolean = false) {
 	}
 
 	echo.vrb([Color[256][33], 'jobs'], jobs)
-	global.jobs = new Obj(jobs)
+	global.jobs = new Obj(jobs, 'Jobs')
 
-	until(() => global.isReady, undefined, '1'.s)
-		.then(function () {
-			global.jobs.forEach(
-				job => cronJob({ jid: env.owner_lid }, job)
-			)
-		})
-		.catch(echo.err)
+	if (!global.isReady)
+		event.once('Agent-ready',
+			function () {
+				global.isReady = true
+				global.jobs.forEach(
+					job => cronJob({ jid: env.owner_lid }, job)
+				)
+			}
+		)
 
 	return global.jobs
 }
@@ -226,6 +290,11 @@ const saveJobs = queue(
 		return jobs
 	}
 )
+
+event.on('Jobs-set', saveJobs)
+event.on('Jobs-map', saveJobs)
+event.on('Jobs-delete', saveJobs)
+event.on('Jobs-filter', saveJobs)
 
 await loadJobs(global.isReloading)
 

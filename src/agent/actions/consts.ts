@@ -1,5 +1,6 @@
 import type { GetCode, IsCode, SplitActions } from '../instructions/consts.ts'
 import type { MsgData } from '../../channels/whatsapp/ws.ts'
+
 import { parser, runAction } from '../interaction.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { env } from '../../utils/config.ts'
@@ -56,7 +57,7 @@ type Actions = Prettify<
 			AnyArray, void,
 			Prettify<
 				& MsgResponse
-				& { action: 'none' }
+				& { action: string }
 			>
 		>
 	}
@@ -100,7 +101,7 @@ const errors = (
 
 const returns = async (ctx: ActionsType, result: unknown) => {
 	echo.scs.ln(result)
-	if (result === null) return
+	if (result === undefined) return
 
 	return parser({
 		...ctx,

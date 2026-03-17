@@ -1,0 +1,35 @@
+{
+	"configurations": [
+
+		{
+			"name": "pnpm:start Agent",
+			"request": "launch",
+			"runtimeArgs": [
+				"run",
+				"start",
+			],
+			"args": [
+				"-v",
+				// "-h"
+			],
+			"runtimeExecutable": "pnpm",
+			"skipFiles": [
+				"<node_internals>/**"
+			],
+			"type": "node"
+		},
+		{
+			"name": "node:start Agent",
+			"request": "launch",
+			"program": "${workspaceFolder}/src/agent/agent.ts",
+			"args": [
+				"-v",
+				// "-h"
+			],
+			"skipFiles": [
+				"<node_internals>/**"
+			],
+			"type": "node"
+		}
+	]
+}

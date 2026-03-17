@@ -16,7 +16,6 @@ import {
 import { delay, queue, lazy, voidFn } from '../../utils/helpers.ts'
 import { echo, Color } from '../../utils/tui.ts'
 import { env } from '../../utils/config.ts'
-import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 
 type CreateSocketOpts = {
@@ -27,13 +26,13 @@ type CreateSocketOpts = {
 }
 
 type WS = ReturnType<typeof makeWASocket> & { send: WS['sendMessage'] }
-type ReconnectFn = (opts: CreateSocketOpts) => Promise<WS>
+type ReconnectFn = (opts?: CreateSocketOpts, reconnectFn?: ReconnectFn, ...args: AnyArray) => Promise<WS>
 
 const getQR = lazy(async () => (await import('qrcode-terminal')).default)
 const getPino = lazy(async () => (await import('pino')).default)
 
 const qsaveCreds = queue(
-	async (saveCreds: AsyncFn) => {
+	async function (saveCreds: AsyncFn) {
 		echo.vrb([Color.BLUE, 'Creds'], 'Save')
 		await saveCreds()
 	}
@@ -131,7 +130,7 @@ async function createWASocket(
 		}
 
 		if (connection === 'open') {
-			connectEvent.emit('open', sock)
+			event.emit('WS-open', sock)
 			echo.scs('WASocket ready.')
 		}
 
@@ -140,7 +139,7 @@ async function createWASocket(
 			const status = (lastDisconnect?.error as any)?.output?.statusCode
 			const shouldReconnect = status !== DisconnectReason.loggedOut
 
-			connectEvent.emit('close', error)
+			event.emit('WS-close', error)
 			echo.err('Connection closed:', status, error)
 
 			if (shouldReconnect) {
@@ -152,7 +151,7 @@ async function createWASocket(
 					sock.ws.close()
 				} catch {}
 
-				delay('1'.s, () => (reconnectFn ?? createWASocket)(opts))
+				delay(reconnectFn ?? createWASocket, '1'.s, [opts, reconnectFn])
 			}
 			else {
 				echo.wrn('Logged out. Deleting auth folder.')
@@ -164,17 +163,12 @@ async function createWASocket(
 	return sock
 }
 
-const connectEvent = new EventEmitter<{
-	'open': [ws: WS],
-	'close': [err: Error]
-}>({
-	captureRejections: true
-})
+type ConnectionListener = SyncFn<[], void, WS>
 
-function conectionHandler() {
-	const listeners: SyncFn<[], void, WS>[] = []
+const Connection = function () {
+	const listeners: ConnectionListener[] = []
 
-	function connection(listener: ValueOf<typeof listeners>) {
+	function connection(listener: ConnectionListener) {
 		listeners.push(listener)
 	}
 
@@ -182,23 +176,29 @@ function conectionHandler() {
 		listeners.forEach(listener => listener.apply(ws))
 	}
 
-	connectEvent.on('open', connection.run)
-	connectEvent.on('close', voidFn)
+	event.on('WS-open', connection.run)
+	event.on('WS-close', echo.err)
 
 	return connection
+} as unknown as {
+	new(): {
+		(listener: ConnectionListener): void
+		run: SyncFn<[ws: WS]>
+	}
 }
 
-const connection = conectionHandler()
+const connection = new Connection()
 
 export {
 	createWASocket,
 	restoreCreds,
 	backupCreds,
 	qsaveCreds,
+	Connection,
 	connection,
 }
 
 export type {
-	WS,
 	CreateSocketOpts,
+	WS,
 }

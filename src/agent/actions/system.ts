@@ -1,7 +1,6 @@
-import { autoReply,  errors,type PActions } from './consts.ts'
+import { autoReply, errors, type PActions } from './consts.ts'
 import { Color, echo } from '../../utils/tui.ts'
 import { spawn } from 'node:child_process'
-import { delay } from '../../utils/helpers.ts'
 
 const system_actions = {
 
@@ -19,9 +18,8 @@ const system_actions = {
 
 		echo.cst.ln([Color.YELLOW, action], reason)
 		autoReply(this, `*[SYSTEM]* \`Reload\`\n${reason}`)
-		global.isReloading = true
-		global.actions?.reload
-		// delay('.5'.m, () => globa.isReloading = false)
+
+		event.emit('Actions-reload')
 	},
 
 	'sys.shutdown'() {

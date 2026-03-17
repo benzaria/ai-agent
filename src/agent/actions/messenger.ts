@@ -16,21 +16,19 @@ const messenger_actions = {
 			platform,
 			message,
 			file,
-			mimetype,
-			mentions,
+			mimetype = '',
+			mentions = [],
 			to, uid, gid,
 		} = this
 
-		const target = '@' + getId(to)
-		const _mentions = [...mentions ?? [], to]
-
+		const _mentions = [...mentions, to]
 		echo.cst([Color.GREEN, action], { to, uid, gid, file, mentions }, '\n' + message)
 
 		if (![gid, uid].includes(to)) autoReply(this,
-			`${platform} -> ${target}${!gid ? '\n' + message : ''}`, _mentions
+			`${platform} -> ${'@' + getId(to)}${!gid ? '\n' + message : ''}`, _mentions
 		)
 
-		if (!file || !mimetype)
+		if (!file)
 			return ws.send(to, {
 				text: message,
 				mentions: _mentions,
@@ -107,7 +105,7 @@ const messenger_actions = {
 			return errors(this, { msg: 'Contact already exists' })
 
 		contacts.set(name, number)
-		saveContacts()
+		// saveContacts()
 
 		autoReply(this, `*[WRITE]* \`contact: ${name}\``)
 	},
@@ -121,7 +119,7 @@ const messenger_actions = {
 			return errors(this, { msg: 'Contact not found' })
 
 		contacts.delete(name)
-		saveContacts()
+		// saveContacts()
 
 		autoReply(this, `*[DELETE]* \`contact: ${name}\``)
 	},
@@ -163,7 +161,7 @@ async function loadContacts(force: boolean = false) {
 	}
 
 	echo.vrb([Color[256][33], 'contacts'], contacts)
-	global.contacts = new Obj(contacts)
+	global.contacts = new Obj(contacts, 'Contacts')
 	return saveContacts()
 }
 
@@ -182,6 +180,11 @@ const saveContacts = queue(
 		return contacts
 	}
 )
+
+event.on('Contacts-set', saveContacts)
+event.on('Contacts-map', saveContacts)
+event.on('Contacts-delete', saveContacts)
+event.on('Contacts-filter', saveContacts)
 
 await loadContacts(global.isReloading)
 

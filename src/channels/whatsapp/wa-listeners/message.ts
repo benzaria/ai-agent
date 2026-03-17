@@ -44,7 +44,7 @@ connection(
 				) continue
 
 				const _this = { msg, m, jid }
-				echo.isp(msg)
+				// echo.isp(msg)
 
 				if (isJidUser(jid)) {
 					userHandler(_this)
@@ -197,13 +197,13 @@ async function userHandler(_this: HandlerData) {
 async function groupHandler(_this: HandlerData) {
 	const { jid, m, msg } = _this
 	const parsed = await parseMessage(m)
-	const { request, mentions } = parsed
+	const { request, mentions = [] } = parsed
 
 	if (!request) return
 	const lRequest = request.toLowerCase()
 
 	if (!(
-		mentions?.includes(env.agent_lid) ||
+		mentions.includes(env.agent_lid) ||
 		lRequest.includes(agentName) ||
 		lRequest.includes(agentLid) ||
 		lRequest.includes(agentJid)

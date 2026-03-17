@@ -1,3 +1,4 @@
+import { AbortablePromise } from './promise.ts'
 import { defineProperties } from './object.ts'
 import { pathToFileURL } from 'node:url'
 import { Color, echo } from './tui.ts'
@@ -15,67 +16,92 @@ global.__rootdir = resolve(import.meta.dirname, '../..')
 // @ts-expect-error Property '__agentdir' does not exist on type 'typeof globalThis'.
 global.__agentdir = resolve(__rootdir, 'agent-files')
 
-function voidFn() {}
+function voidFn(..._args: AnyArray) {}
 
-type TimerId = ReturnType<typeof setTimeout>
+type TimerId = Returns<typeof setTimeout>
 type TimerObj = { timer: TimerId, clear: SyncFn }
 
 function makeTimer<P extends AnyArray>(
 	method: 'Timeout' | 'Interval',
 	callback: SyncFn<P, void, TimerObj>,
 	delay?: number,
-	args?: P,
-) {
-	const clear = timers[`clear${method}`]
-	const id = timers[`set${method}`](
+	args: P = [] as unknown as P,
+): TimerObj {
+
+	const clear = () => timers[`clear${method}`](timer)
+	const timer = timers[`set${method}`](
 		function (..._args: P) {
 			callback.apply(
-				{ timer: id, clear: () => clear(id) },
+				{ timer, clear },
 				_args
 			)
 		},
 		delay,
-		...(args ?? [])
+		...args
 	) as unknown as TimerId
 
-	return { timer: id, clear: () => clear(id) }
+	return { timer, clear }
 }
 
 function delay(timeout: number): Promise<TimerObj>
-function delay(timeout: number, callback?: SyncFn<AnyArray, void, TimerObj>, args?: AnyArray ): TimerObj
-function delay<P extends AnyArray>(timeout: number, callback?: SyncFn<P, void, TimerObj>, args?: P) {
+function delay(callback: SyncFn<AnyArray, void, TimerObj>, timeout?: number, args?: AnyArray ): TimerObj
+function delay<P extends AnyArray>(
+	timeout_callback: number | SyncFn<P, void, TimerObj>,
+	timeout?: number,
+	args?: P
+) {
 	return (
-		callback
-			? makeTimer('Timeout', callback, timeout, args)
-			: new Promise(res => delay(timeout, res, args))
+		typeof timeout_callback === 'function'
+			? makeTimer('Timeout', timeout_callback, timeout, args)
+			: new Promise(res => delay(res, timeout_callback, args))
 	)
 }
 
-function repeat<P extends AnyArray>(interval: number, callback: SyncFn<P, void, TimerObj>, args?: P) {
+function repeat<P extends AnyArray>(
+	callback: SyncFn<P, void, TimerObj>,
+	interval: number = '.5'.s,
+	args?: P
+) {
 	return makeTimer('Interval', callback, interval, args)
 }
 
-function until(
-	predicate: SyncFn<[], boolean>,
+function until<P extends AnyArray>(
+	predicate: SyncFn<P, boolean | void>,
 	interval: number = '.5'.s,
 	timeout: number = '2'.m,
+	args: P = [] as unknown as P
 ) {
-	return new Promise<void>((res, rej) => {
+	return new AbortablePromise<void>(
+		function (resolve, reject, onAbort) {
 
-		const _delay = delay(timeout, function () {
-			_repeat.clear()
-			rej(new Error(`\`until\` Timeout after ${timeout}`))
-		})
+			const delayTimer = delay(
+				function () {
+					repeatTimer.clear()
+					reject(new Error(`Timeout after ${timeout}`))
+				},
+				timeout
+			)
 
-		const _repeat = repeat(interval, function () {
-			if (!predicate()) return
+			const repeatTimer = repeat(
+				function () {
+					if (!predicate(...args)) return
 
-			_delay.clear()
-			this.clear()
-			res()
-		})
+					delayTimer.clear()
+					this.clear()
+					resolve()
+				},
+				interval
+			)
 
-	})
+			onAbort(
+				function (this) {
+					delayTimer.clear()
+					repeatTimer.clear()
+					reject(this.reason)
+				}
+			)
+		},
+	)
 }
 
 function lazy<P extends AnyArray, R, T>(factory: AsyncFn<P, R, T>) {
@@ -134,7 +160,7 @@ function queue<P extends AnyArray, R, T>(factory: AsyncFn<P, R, T>) {
 	)
 }
 
-const ROOT = Symbol('root')
+const ROOT = Symbol('import-root')
 
 type HotImport = {
 	(path: string, opt?: ImportCallOptions): Promise<any>
@@ -144,7 +170,7 @@ type HotImport = {
 
 const HotImport = function (root?: string) {
 
-	const self = async function (path: string, opt?: ImportCallOptions) {
+	const self: any = async function (path: string, opt?: ImportCallOptions) {
 		const url = pathToFileURL(resolve(self.root, path))
 		url.searchParams.set('v', '' + Date.now())
 		echo.vrb([Color[256][177], 'import'], url.pathname)
@@ -161,7 +187,7 @@ const HotImport = function (root?: string) {
 			).default
 
 		return import(url.href, opt)
-	} as HotImport
+	}
 
 	return defineProperties(self,
 		{
@@ -170,17 +196,17 @@ const HotImport = function (root?: string) {
 				writable: true,
 				value: root ?? __rootdir,
 			},
-			root: { get: () => (self as any)[ROOT] },
+			root: { get: () => self[ROOT] },
 			bind: { value:
 				function ({ root }: { root: string }) {
-					(self as any)[ROOT] = root
+					self[ROOT] = root
 					return self
 				}
 			},
 		}
 	)
 } as unknown as {
-	new (root?: string): HotImport
+	new(root?: string): HotImport
 }
 
 const hotImport = new HotImport()

@@ -1,43 +1,56 @@
 import { hotImport, queue } from './helpers.ts'
 import { writeFile } from 'node:fs/promises'
 import { homedir, platform } from 'node:os'
+import { Color, echo } from './tui.ts'
 import { cwd } from 'node:process'
+import { Obj } from './object.ts'
 import { join } from 'node:path'
-import { echo } from './tui.ts'
 
 const secretsPathAlt = join(import.meta.dirname, '/secrets_alt.json')
 const secretsPath = join(__agentdir, '/secrets.json')
-const secrets = await loadSecrets(global.isReloading)
 
-function loadSecrets(_force: boolean = false): Promise<Secrets> {
+async function loadSecrets(force: boolean = false) {
+	if (global.secrets && !force) return global.secrets
+	let secrets: Secrets
+
 	try {
-		return hotImport(secretsPath)
+		secrets = await hotImport(secretsPath)
 	} catch {
 		echo.wrn(`
 			\rSecrets are not setup at: "${secretsPath}"
       \rLoading default template: "${secretsPathAlt}"
     `.replaceAll('\\', '/'))
 
-		return hotImport(secretsPathAlt)
+		secrets = await hotImport(secretsPathAlt)
+			.catch(echo.err)
 	}
+
+	echo.vrb([Color[256][33], 'secrets'], secrets)
+	global.secrets = new Obj(secrets, 'Secrets')
+
+	return global.secrets
 }
 
 const saveSecrets = queue(
-	async function (obj: Partial<Secrets> & Record<string, any>) {
+	async function (obj?: Partial<Secrets> & AnyRecord) {
+		if (obj)
+			secrets.set(obj)
+
 		await writeFile(
 			secretsPath,
-			JSON.stringify(
-				Object.assign(
-					secrets,
-					obj
-				),
-				null, 2
-			)
+			secrets.json(2)
 		).catch(echo.err)
 
 		return secrets
 	}
 )
+
+event.on('Secrets-set', saveSecrets)
+event.on('Secrets-map', saveSecrets)
+event.on('Secrets-delete', saveSecrets)
+event.on('Secrets-filter', saveSecrets)
+
+await loadSecrets(global.isReloading)
 
 type Config = {
   providers: {
@@ -103,7 +116,7 @@ const env = {
 	model: 'openai/gpt-5-mini',
 	persona: 'jarvis',
 	userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-	...secrets
+	...secrets.store as Secrets
 } as const satisfies Config['env']
 
 export {

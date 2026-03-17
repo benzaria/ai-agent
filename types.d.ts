@@ -28,13 +28,16 @@ declare global {
   var persona: Personas
   var provider: Providers
   var isReloading: boolean
-  var jobs: Obj<string, Job>
-  var shutdown: AsyncFn<[], never>
   var actions: typeof lazedActions
   var instructions: InstructionsType
+
+  var shutdown: AsyncFn<[], never>
+
+  var jobs: Obj<string, Job>
+  var secrets: Obj<keyof Secrets, ValueOf<Secrets>, Secrets>
   var contacts: Obj<Literal<keyof __contacts, string>, number>
 
-  type Prettify<T> = T extends AnyFunction ? T : {[K in keyof T]: T[K]}
+  type Prettify<T> = T extends AnyFunction ? T : { [K in keyof T]: T[K] }
   type ValueOf<T> = T extends readonly any[] ? T[number] : T[keyof T]
   type Returns<T> = T extends SyncFn<AnyArray, infer R> ? R : never
   type Literal<T extends U, U> = T | (U & Prettify<{}>)
@@ -56,6 +59,13 @@ declare global {
         : false
       : false
 
+  type Not<T> =
+    IsNever<T> extends true ? true
+      : [T] extends [true] ? false
+        : true
+
+  type NotFunction<T> = T extends AnyFunction ? never : T
+
   type SyncFn<P extends AnyArray = [], R = void, T = unknown> =
     IsUnknown<T> extends true
       ? (...args: P) => R
@@ -70,7 +80,7 @@ declare global {
   type _ = typeof _
   type AnyArray = any[]
   type AnyEntries = [any, any][]
-  type AnyRecord = {[x in any]: any}
+  type AnyRecord = { [x in any]: any }
   type AnyFunction = SyncFn<AnyArray, any>
   type VoidFn = SyncFn<AnyArray>
   type EmptyObject = { [_]?: never }

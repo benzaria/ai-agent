@@ -1,35 +1,44 @@
 import type { MsgData } from '../channels/whatsapp/ws.ts'
-import type { Actions, ActionsType } from './actions.ts'
+import type { ActionsType } from './actions.ts'
+
 import { lazy, hotImport } from '../utils/helpers.ts'
 import { Color, echo } from '../utils/tui.ts'
 import { env } from '../utils/config.ts'
 
-global.actions = lazy(async () => (await hotImport('src/agent/actions.ts')).actions as Actions)
-actions() // preload
+global.actions = lazy(async () => (await hotImport('src/agent/actions.ts')).actions)
+actions() //? preload
 
-async function parser(data: MsgData & { response: string }) {
+async function parser(data: MsgData & { response: string | ActionsType[] }) {
 	const { response } = data
 
 	try {
-		const resJSON = JSON.parse(response) as ActionsType
+		const actions: ActionsType | ActionsType[] =
+			typeof response === 'string'
+				? JSON.parse(response)
+				: response
 
-		if (Array.isArray(resJSON)) {
-			resJSON.reduce(
-				async (output: AnyArray, action: ActionsType, index) => {
+		if (Array.isArray(actions)) {
+			await actions.reduce(
+				async (output: Promise<unknown[]> | unknown[], action: ActionsType, index) => {
 					echo.vrb([Color.BR_BLUE, 'action'], action)
+					output = await output
 
-					return await runAction({ ...data, ...action }, output, index)
+					output.push(
+						await runAction({ ...data, ...action }, output, index)
+					)
+
+					return output
 				},
-				undefined
+				Promise.resolve([])
 			)
 		}
 		else {
-			await runAction({ ...data, ...resJSON })
+			await runAction({ ...data, ...actions })
 		}
 	} catch (err: any) {
 		if (err.message.includes('is not valid JSON')) {
-			runAction({
-				...data,
+			await runAction({
+				...data as any,
 				action: 'talk',
 				text: response,
 			})
@@ -42,21 +51,21 @@ async function parser(data: MsgData & { response: string }) {
 
 async function runAction(
 	_this: ActionsType,
-	output?: AnyArray,
+	output?: unknown[],
 	_index?: number //! USE ME
 ): Promise<unknown> {
 	const { action, uid, request } = _this
 
-	if (
-		!env.safe_actions.includes(action) &&
-    !env.auth_users.includes(uid) &&
-		!request?.includes(env.admin_key)
-	) return authorizeError(_this, action)
+	if (!(
+		env.safe_actions.includes(action) ||
+    env.auth_users.includes(uid) ||
+		request.startsWith('/' + env.admin_key)
+	)) return authorizeError(_this, action)
 
-	const fn = Reflect.get(await actions?.(), action) as SyncFn<[], unknown>
+	const fn = (await actions?.())?.[action] as AsyncFn<[], unknown, ActionsType>
 
 	return fn
-		? fn.apply({ ..._this, output })
+		? await fn.apply({ ..._this, output })
 		: supportError(_this, action)
 }
 

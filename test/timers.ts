@@ -3,11 +3,11 @@ import { echo } from '../src/utils/tui.ts'
 
 let _var: boolean = false
 
-delay('3'.s, () => { echo('delay_1'), _var = true })
+delay(() => { echo('delay_1'), _var = true }, '3'.s)
 
 
-until(() => _var)
+const p = until(() => _var)
 	.then(() => echo('until_1'))
+	.catch(echo.err)
 
-
-delay('3'.s, () => echo('delay_2'))
+delay(() => p.abort(() => new Error('sheesh')), '1'.s)
